@@ -21,21 +21,22 @@ jobs:
           config /etc/3proxy/3proxy.cfg
           monitor /etc/3proxy/3proxy.cfg
           log /etc/3proxy/logs/3proxy.log D
-          logformat "- +_L%t.%. %p %c:%C %r:%R %O %I %h %T"
+          logformat \"- +_L%t.%. %p %c:%C %r:%R %O %I %h %T\"
           proxy -p3128" > 3proxy.cfg
           sudo cp 3proxy.cfg /etc/3proxy/3proxy.cfg
           sudo nohup /usr/local/bin/3proxy /etc/3proxy/3proxy.cfg &
 
-      - name: Install & Start Ngrok Tunnel
+      - name: Install Ngrok and Start TCP Tunnel
         run: |
           curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
           echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
           sudo apt update && sudo apt install ngrok -y
           ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
-          nohup ngrok tcp 3128 > ngrok.log 2>&1 &
-          sleep 10
-          cat ngrok.log | grep -Eo "tcp://[a-z0-9.:]+" | head -n 1
+          nohup ngrok tcp 3128 > /dev/null 2>&1 &
+          sleep 15
+          echo "Ngrok Proxy Link:"
+          curl --silent http://127.0.0.1:4040/api/tunnels | grep -oE "tcp://[^\"]+"
 
-      - name: Keep Workflow Running
+      - name: Keep Alive
         run: tail -f /dev/null
         
