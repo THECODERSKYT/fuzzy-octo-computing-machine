@@ -11,15 +11,26 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install git build-essential -y
+          sudo apt install git build-essential curl -y
 
       - name: Clone and build 3Proxy
         run: |
           git clone https://github.com/z3APA3A/3proxy.git
           cd 3proxy
-          make -f Makefile.Linux
+          make -f Makefile.Linux > build.log 2>&1 || (cat build.log && exit 1)
+          ls -la src/
+          if [ -f src/3proxy ]; then
+            echo "Build successful."
+          else
+            echo "3proxy binary not found in src/. Build failed."
+            cat build.log
+            exit 1
+          fi
           sudo mkdir -p /usr/local/etc/3proxy /usr/local/3proxy/logs
           sudo cp src/3proxy /usr/local/bin/
+
+      - name: Configure 3Proxy
+        run: |
           echo "nscache 65536
           config /usr/local/etc/3proxy/3proxy.cfg
           monitor /usr/local/etc/3proxy/3proxy.cfg
@@ -28,7 +39,7 @@ jobs:
           proxy -p3128" | sudo tee /usr/local/etc/3proxy/3proxy.cfg
           sudo nohup /usr/local/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
 
-      - name: Install Ngrok and start tunnel
+      - name: Install Ngrok and Start TCP Tunnel
         run: |
           curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
           echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
@@ -36,9 +47,9 @@ jobs:
           ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
           nohup ngrok tcp 3128 > /dev/null 2>&1 &
           sleep 10
-          echo "Proxy is live at:"
+          echo "Ngrok tunnel URL:"
           curl -s http://127.0.0.1:4040/api/tunnels | grep -oE "tcp://[^\"]+"
 
-      - name: Keep it running
+      - name: Keep runner alive
         run: tail -f /dev/null
         
