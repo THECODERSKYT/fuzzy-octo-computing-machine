@@ -7,11 +7,12 @@ jobs:
   tunnel:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Cloud Relay
+      - name: Start Serveo Tunnel and Keep Alive
         run: |
           sudo apt update
           sudo apt install openssh-client -y
-          ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 serveo.net &
-          sleep 5
-          echo "Tunnel initiated."
+          nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 serveo.net > tunnel.log 2>&1 &
+          echo "Tunnel started at $(date)"
+          echo "Keep session alive..."
+          tail -f /dev/null
           
