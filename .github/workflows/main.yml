@@ -1,40 +1,36 @@
-name: 3Proxy Tunnel (Prebuilt)
+name: Ngrok SSH Tunnel
 
 on:
   workflow_dispatch:
 
 jobs:
-  proxy:
+  ssh-ngrok:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download prebuilt 3Proxy binary
-        run: |
-          curl -L -o 3proxy.tar.gz https://github.com/3proxy/3proxy/releases/download/0.9.4/3proxy-0.9.4-Linux.tar.gz
-          tar -xvzf 3proxy.tar.gz
-          chmod +x 3proxy/src/3proxy
-          sudo cp 3proxy/src/3proxy /usr/local/bin/
+    - name: Set up SSH server
+      run: |
+        sudo apt update
+        sudo apt install -y openssh-server
+        sudo systemctl enable ssh
+        sudo systemctl start ssh
+        echo 'root:root' | sudo chpasswd
+        sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+        sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+        sudo systemctl restart ssh
 
-      - name: Create 3Proxy config
-        run: |
-          mkdir -p ~/3proxy/logs
-          echo "nscache 65536
-          log ~/3proxy/logs/3proxy.log D
-          logformat \"- +_L%t.%. %p %c:%C %r:%R %O %I %h %T\"
-          proxy -p3128" > ~/3proxy/3proxy.cfg
-          nohup /usr/local/bin/3proxy ~/3proxy/3proxy.cfg &
+    - name: Install Ngrok
+      run: |
+        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+        echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+        sudo apt update && sudo apt install ngrok -y
 
-      - name: Install Ngrok and Start Tunnel
-        run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update && sudo apt install ngrok -y
-          ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
-          nohup ngrok tcp 3128 > /dev/null 2>&1 &
-          sleep 8
-          echo "Proxy TCP Address:"
-          curl -s http://127.0.0.1:4040/api/tunnels | grep -oE "tcp://[^\"]+"
-
-      - name: Keep runner alive
-        run: tail -f /dev/null
+    - name: Start Ngrok Tunnel
+      env:
+        NGROK_AUTHTOKEN: 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
+      run: |
+        ngrok config add-authtoken $NGROK_AUTHTOKEN
+        nohup ngrok tcp 22 --region ap > ngrok.log &
+        sleep 10
+        cat ngrok.log | grep "tcp://"
         
