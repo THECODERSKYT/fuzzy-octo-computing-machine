@@ -1,4 +1,4 @@
-name: Tunnel Session
+name: HTTP Proxy Tunnel
 
 on:
   workflow_dispatch:
@@ -7,23 +7,23 @@ jobs:
   tunnel:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Tools
-        run: sudo apt update && sudo apt install openssh-client -y
-
-      - name: Start Web Server on Port 8080
+      - name: Install TinyProxy
         run: |
-          mkdir public && echo "Tunnel is working!" > public/index.html
-          nohup python3 -m http.server 8080 --directory public > /dev/null 2>&1 &
-          echo "Web server running at localhost:8080"
+          sudo apt update
+          sudo apt install tinyproxy -y
+          sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^Port 8888/Port 8080/' /etc/tinyproxy/tinyproxy.conf
+          sudo systemctl restart tinyproxy
+          echo "TinyProxy is running on port 8080"
 
-      - name: Start Serveo Tunnel
+      - name: Start Serveo Tunnel for Proxy
         run: |
           nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 serveo.net > serveo.log 2>&1 &
           sleep 8
           TUNNEL_URL=$(grep -oP "https://[a-z0-9]+\.serveo.net" serveo.log | head -n 1)
-          echo "Tunnel is live at:"
+          echo "Your HTTP Proxy URL is:"
           echo "$TUNNEL_URL"
 
-      - name: Keep Workflow Running
+      - name: Keep Session Alive
         run: tail -f /dev/null
         
