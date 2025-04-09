@@ -1,4 +1,4 @@
-name: Localhost Proxy Tunnel
+name: Ngrok Proxy Tunnel
 
 on:
   workflow_dispatch:
@@ -16,15 +16,19 @@ jobs:
           sudo systemctl restart tinyproxy
           echo "TinyProxy started on port 8080"
 
-      - name: Start localhost.run Tunnel
+      - name: Download & Configure Ngrok
         run: |
-          curl -o localhost.run https://localhost.run/
-          nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 ssh.localhost.run > tunnel.log 2>&1 &
-          sleep 8
-          TUNNEL_URL=$(grep -oP "https://[a-z0-9]+\.localhost\.run" tunnel.log | head -n 1)
-          echo "Proxy URL:"
-          echo "$TUNNEL_URL"
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update && sudo apt install ngrok -y
+          ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
 
-      - name: Keep Alive
+      - name: Start Ngrok TCP Tunnel
+        run: |
+          nohup ngrok tcp 8080 > ngrok.log 2>&1 &
+          sleep 10
+          cat ngrok.log | grep -Eo "tcp://[0-9a-zA-Z.:]+" | head -n 1
+
+      - name: Keep Workflow Alive
         run: tail -f /dev/null
         
