@@ -1,4 +1,4 @@
-name: 3Proxy Ngrok Tunnel
+name: 3Proxy Tunnel (Prebuilt)
 
 on:
   workflow_dispatch:
@@ -8,46 +8,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install dependencies
+      - name: Download prebuilt 3Proxy binary
         run: |
-          sudo apt update
-          sudo apt install git build-essential curl -y
+          curl -L -o 3proxy.tar.gz https://github.com/3proxy/3proxy/releases/download/0.9.4/3proxy-0.9.4-Linux.tar.gz
+          tar -xvzf 3proxy.tar.gz
+          chmod +x 3proxy/src/3proxy
+          sudo cp 3proxy/src/3proxy /usr/local/bin/
 
-      - name: Clone and build 3Proxy
+      - name: Create 3Proxy config
         run: |
-          git clone https://github.com/z3APA3A/3proxy.git
-          cd 3proxy
-          make -f Makefile.Linux > build.log 2>&1 || (cat build.log && exit 1)
-          ls -la src/
-          if [ -f src/3proxy ]; then
-            echo "Build successful."
-          else
-            echo "3proxy binary not found in src/. Build failed."
-            cat build.log
-            exit 1
-          fi
-          sudo mkdir -p /usr/local/etc/3proxy /usr/local/3proxy/logs
-          sudo cp src/3proxy /usr/local/bin/
-
-      - name: Configure 3Proxy
-        run: |
+          mkdir -p ~/3proxy/logs
           echo "nscache 65536
-          config /usr/local/etc/3proxy/3proxy.cfg
-          monitor /usr/local/etc/3proxy/3proxy.cfg
-          log /usr/local/3proxy/logs/3proxy.log D
+          log ~/3proxy/logs/3proxy.log D
           logformat \"- +_L%t.%. %p %c:%C %r:%R %O %I %h %T\"
-          proxy -p3128" | sudo tee /usr/local/etc/3proxy/3proxy.cfg
-          sudo nohup /usr/local/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
+          proxy -p3128" > ~/3proxy/3proxy.cfg
+          nohup /usr/local/bin/3proxy ~/3proxy/3proxy.cfg &
 
-      - name: Install Ngrok and Start TCP Tunnel
+      - name: Install Ngrok and Start Tunnel
         run: |
           curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
           echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
           sudo apt update && sudo apt install ngrok -y
           ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
           nohup ngrok tcp 3128 > /dev/null 2>&1 &
-          sleep 10
-          echo "Ngrok tunnel URL:"
+          sleep 8
+          echo "Proxy TCP Address:"
           curl -s http://127.0.0.1:4040/api/tunnels | grep -oE "tcp://[^\"]+"
 
       - name: Keep runner alive
