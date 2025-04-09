@@ -1,4 +1,4 @@
-name: Session Launcher
+name: Tunnel Session
 
 on:
   workflow_dispatch:
@@ -7,21 +7,23 @@ jobs:
   tunnel:
     runs-on: ubuntu-latest
     steps:
-      - name: Install SSH Client
+      - name: Install Tools
         run: sudo apt update && sudo apt install openssh-client -y
 
-      - name: Start Serveo Tunnel in Background
+      - name: Start Web Server on Port 8080
         run: |
-          echo "Starting Serveo tunnel..."
-          nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 serveo.net > serveo.log 2>&1 &
-          sleep 10
-          echo "Checking tunnel URL..."
-          TUNNEL_URL=$(grep -oP "https://[a-z0-9]+\.serveo.net" serveo.log | head -n 1)
-          echo "Your tunnel is live:"
-          echo "$TUNNEL_URL"
-          echo "::set-output name=url::$TUNNEL_URL"
+          mkdir public && echo "Tunnel is working!" > public/index.html
+          nohup python3 -m http.server 8080 --directory public > /dev/null 2>&1 &
+          echo "Web server running at localhost:8080"
 
-      - name: Keep GitHub Job Alive
+      - name: Start Serveo Tunnel
         run: |
-          echo "Keeping the tunnel alive..."
-          tail -f /dev/null
+          nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 serveo.net > serveo.log 2>&1 &
+          sleep 8
+          TUNNEL_URL=$(grep -oP "https://[a-z0-9]+\.serveo.net" serveo.log | head -n 1)
+          echo "Tunnel is live at:"
+          echo "$TUNNEL_URL"
+
+      - name: Keep Workflow Running
+        run: tail -f /dev/null
+        
