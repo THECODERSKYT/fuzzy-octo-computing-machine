@@ -7,12 +7,21 @@ jobs:
   tunnel:
     runs-on: ubuntu-latest
     steps:
-      - name: Start Serveo Tunnel and Keep Alive
+      - name: Install SSH Client
+        run: sudo apt update && sudo apt install openssh-client -y
+
+      - name: Start Serveo Tunnel in Background
         run: |
-          sudo apt update
-          sudo apt install openssh-client -y
-          nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 serveo.net > tunnel.log 2>&1 &
-          echo "Tunnel started at $(date)"
-          echo "Keep session alive..."
+          echo "Starting Serveo tunnel..."
+          nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 serveo.net > serveo.log 2>&1 &
+          sleep 10
+          echo "Checking tunnel URL..."
+          TUNNEL_URL=$(grep -oP "https://[a-z0-9]+\.serveo.net" serveo.log | head -n 1)
+          echo "Your tunnel is live:"
+          echo "$TUNNEL_URL"
+          echo "::set-output name=url::$TUNNEL_URL"
+
+      - name: Keep GitHub Job Alive
+        run: |
+          echo "Keeping the tunnel alive..."
           tail -f /dev/null
-          
