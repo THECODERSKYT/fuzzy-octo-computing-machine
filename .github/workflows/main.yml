@@ -1,36 +1,65 @@
-name: Ngrok SSH Tunnel
+name: OpenVPN + Ngrok Tunnel
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"  # Restart every 6 hours
 
 jobs:
-  ssh-ngrok:
+  vpn:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Set up SSH server
-      run: |
-        sudo apt update
-        sudo apt install -y openssh-server
-        sudo systemctl enable ssh
-        sudo systemctl start ssh
-        echo 'root:root' | sudo chpasswd
-        sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-        sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
-        sudo systemctl restart ssh
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y openvpn easy-rsa curl unzip
 
-    - name: Install Ngrok
-      run: |
-        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-        echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-        sudo apt update && sudo apt install ngrok -y
+      - name: Setup EasyRSA & Generate Certificates
+        run: |
+          mkdir -p ~/easy-rsa
+          curl -L https://github.com/OpenVPN/easy-rsa/releases/download/v3.1.2/EasyRSA-3.1.2.tgz | tar xz -C ~/easy-rsa --strip-components=1
+          cd ~/easy-rsa
+          ./easyrsa init-pki
+          echo | ./easyrsa build-ca nopass
+          ./easyrsa gen-dh
+          ./easyrsa build-server-full server nopass
+          ./easyrsa build-client-full client1 nopass
+          ./easyrsa gen-crl
 
-    - name: Start Ngrok Tunnel
-      env:
-        NGROK_AUTHTOKEN: 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
-      run: |
-        ngrok config add-authtoken $NGROK_AUTHTOKEN
-        nohup ngrok tcp 22 --region ap > ngrok.log &
-        sleep 10
-        cat ngrok.log | grep "tcp://"
-        
+      - name: Configure OpenVPN
+        run: |
+          mkdir -p ~/openvpn
+          cat > ~/openvpn/server.conf <<EOF
+port 1194
+proto tcp
+dev tun
+ca ~/easy-rsa/pki/ca.crt
+cert ~/easy-rsa/pki/issued/server.crt
+key ~/easy-rsa/pki/private/server.key
+dh ~/easy-rsa/pki/dh.pem
+server 10.8.0.0 255.255.255.0
+ifconfig-pool-persist ipp.txt
+keepalive 10 120
+persist-key
+persist-tun
+status openvpn-status.log
+verb 3
+EOF
+
+      - name: Start OpenVPN server
+        run: sudo openvpn --config ~/openvpn/server.conf &
+
+      - name: Download and configure Ngrok
+        run: |
+          curl -s https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip -o ngrok.zip
+          unzip ngrok.zip
+          chmod +x ngrok
+          ./ngrok authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
+          ./ngrok tcp 1194 > ngrok.log &
+          sleep 10
+
+      - name: Display Ngrok TCP address
+        run: |
+          curl -s http://localhost:4040/api/tunnels | grep -o 'tcp://[0-9a-zA-Z\.:]*'
+          
