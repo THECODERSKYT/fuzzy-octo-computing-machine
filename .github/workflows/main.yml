@@ -1,4 +1,4 @@
-name: HTTP Proxy Tunnel
+name: Localhost Proxy Tunnel
 
 on:
   workflow_dispatch:
@@ -14,16 +14,17 @@ jobs:
           sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Port 8888/Port 8080/' /etc/tinyproxy/tinyproxy.conf
           sudo systemctl restart tinyproxy
-          echo "TinyProxy is running on port 8080"
+          echo "TinyProxy started on port 8080"
 
-      - name: Start Serveo Tunnel for Proxy
+      - name: Start localhost.run Tunnel
         run: |
-          nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 serveo.net > serveo.log 2>&1 &
+          curl -o localhost.run https://localhost.run/
+          nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 ssh.localhost.run > tunnel.log 2>&1 &
           sleep 8
-          TUNNEL_URL=$(grep -oP "https://[a-z0-9]+\.serveo.net" serveo.log | head -n 1)
-          echo "Your HTTP Proxy URL is:"
+          TUNNEL_URL=$(grep -oP "https://[a-z0-9]+\.localhost\.run" tunnel.log | head -n 1)
+          echo "Proxy URL:"
           echo "$TUNNEL_URL"
 
-      - name: Keep Session Alive
+      - name: Keep Alive
         run: tail -f /dev/null
         
