@@ -1,0 +1,15 @@
+name: Pure 10GB Speed Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  speedtest:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Run Full 10GB Speed Test
+      run: |
+        echo "Starting FULL 10GB file download (direct, no proxy)..."
+        curl -o /dev/null -s -w '\nDownload Speed: %{speed_download} bytes/sec\nTotal Time: %{time_total} sec\n' https://ash-speed.hetzner.com/10GB.bin
+        
