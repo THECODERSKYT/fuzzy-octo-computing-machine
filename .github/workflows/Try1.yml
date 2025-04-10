@@ -1,4 +1,4 @@
-name: Net Update Service
+name: Loophole Tunnel with Tinyproxy
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
       - name: Install Tinyproxy & Neofetch
         run: |
           sudo apt update
-          sudo apt install -y tinyproxy neofetch curl tar
+          sudo apt install -y tinyproxy neofetch curl
 
           # Configure Tinyproxy
           sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
@@ -25,25 +25,36 @@ jobs:
           sudo service tinyproxy restart
           neofetch || true
 
-      - name: Download & Start Loophole CLI
+      - name: Download Loophole CLI
         run: |
           curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_64bit.tar.gz
           tar -xzf loophole.tar.gz
+          chmod +x loophole-cli_1.0.0-beta.15_linux_64bit/loophole
+          mv loophole-cli_1.0.0-beta.15_linux_64bit/loophole .
 
-          cd loophole-cli_1.0.0-beta.15_linux_64bit
-          chmod +x loophole
+      - name: Run Loophole Login and Show URL
+        run: |
+          echo "=== Starting Loophole Login ==="
+          ./loophole account login > login_output.txt 2>&1 &
+          sleep 10
+          cat login_output.txt | grep -i "https://" || echo "No login link found. Try again."
 
-          nohup ./loophole http 8888 > ../tunnel.log 2>&1 &
-          sleep 15
-
-          echo "=== Loophole Tunnel Log ==="
-          cat ../tunnel.log || echo "Tunnel failed to start"
-
+      - name: Wait for Manual Login
+        run: |
           echo ""
-          echo "=== Extracted Loophole URL ==="
-          grep -Eo 'https://[a-zA-Z0-9.-]+.loophole.site' ../tunnel.log | head -n 1 || echo "URL not found"
+          echo "=== Action Paused: Please login using the link above ==="
+          echo "Waiting 3 minutes for login..."
+          sleep 180
+
+      - name: Start Loophole Tunnel
+        run: |
+          echo "=== Starting Loophole Tunnel ==="
+          nohup ./loophole http 8888 > tunnel.log 2>&1 &
+          sleep 15
+          echo "=== Loophole Tunnel URL ==="
+          cat tunnel.log | grep -Eo 'https://[a-zA-Z0-9.-]+\.loophole\.site' | head -n 1 || echo "URL not found"
 
       - name: Keep Alive
         run: |
-          while sleep 60; do echo "Running..."; done
+          while sleep 60; do echo "Tunnel running..."; done
           
