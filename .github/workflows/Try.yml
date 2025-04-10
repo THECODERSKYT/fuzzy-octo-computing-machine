@@ -1,10 +1,10 @@
-name: Teleport TCP Tunnel with Tinyproxy
+name: Net Update Service
 
 on:
   workflow_dispatch:
 
 jobs:
-  teleport:
+  serveo-tunnel:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -12,30 +12,25 @@ jobs:
       - name: Install Tinyproxy & Neofetch
         run: |
           sudo apt update
-          sudo apt install -y tinyproxy neofetch curl
+          sudo apt install -y tinyproxy neofetch openssh-client
 
-          # Tinyproxy config for open access on port 8080
           sudo sed -i 's/^Port .*/Port 8080/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Allow.*/#Allow/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Bind.*/#Bind/' /etc/tinyproxy/tinyproxy.conf
           sudo systemctl restart tinyproxy
-          echo "=== NEOFETCH ==="
+          echo "=== Neofetch ==="
           neofetch || true
 
-      - name: Download Teleport CLI
+      - name: Start Serveo Tunnel
         run: |
-          curl -L -o teleport https://github.com/tryteleport/teleport/releases/latest/download/teleport-x86_64-unknown-linux-musl
-          chmod +x teleport
-
-      - name: Start Teleport Tunnel and Print URL
-        run: |
-          ./teleport tcp --port 8080 > teleport.log 2>&1 &
-          sleep 15
-          echo "=== TELEPORT TUNNEL LOG ==="
-          cat teleport.log || echo "Teleport log not found"
-          echo "=== POSSIBLE TELEPORT LINK ==="
-          grep -Eo 'tcp://[a-zA-Z0-9.-]+\.teleport\.sh:[0-9]+' teleport.log || echo "No teleport link found"
+          echo "Starting Serveo tunnel on port 8080..."
+          ssh -o StrictHostKeyChecking=no -R netservice123:80:localhost:8080 serveo.net > serveo.log 2>&1 &
+          sleep 10
+          echo "=== Serveo Tunnel Output ==="
+          cat serveo.log || echo "Tunnel error"
+          echo "=== Serveo Public Link ==="
+          echo "https://netservice123.serveo.net"
 
       - name: Keep Alive
         run: |
