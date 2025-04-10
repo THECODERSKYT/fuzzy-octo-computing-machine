@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  serveo-tunnel:
+  ngrok-tunnel:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -12,27 +12,34 @@ jobs:
       - name: Install Tinyproxy & Neofetch
         run: |
           sudo apt update
-          sudo apt install -y tinyproxy neofetch openssh-client
-          
+          sudo apt install -y tinyproxy neofetch
+
           sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Allow.*/#Allow/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Bind.*/#Bind/' /etc/tinyproxy/tinyproxy.conf
 
           sudo service tinyproxy restart
-          echo "=== Neofetch ==="
           neofetch || true
 
-      - name: Start Serveo Tunnel on port 8888
+      - name: Download Ngrok
         run: |
-          echo "Starting Serveo tunnel on port 8888..."
-          ssh -o StrictHostKeyChecking=no -R netservice123:80:localhost:8888 serveo.net > serveo.log 2>&1 &
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update && sudo apt install ngrok -y
+
+      - name: Set up Ngrok Tunnel
+        env:
+          NGROK_AUTHTOKEN: 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
+        run: |
+          ngrok config add-authtoken "$NGROK_AUTHTOKEN"
+          nohup ngrok tcp 8888 > ngrok.log 2>&1 &
           sleep 10
-          echo "=== Serveo Tunnel Output ==="
-          cat serveo.log || echo "Tunnel error"
-          echo "=== Serveo Public Link ==="
-          echo "https://netservice123.serveo.net"
+          echo "=== Ngrok Tunnel Info ==="
+          curl -s http://127.0.0.1:4040/api/tunnels | grep -E 'public_url|tcp'
+          echo "=== If nothing shows, check ngrok.log ==="
+          cat ngrok.log || true
 
       - name: Keep Alive
         run: |
-          while sleep 60; do echo "Tunnel running..."; done
+          while sleep 60; do echo "Running..."; done
           
