@@ -1,4 +1,4 @@
-name: OpenVPN with Ngrok Tunnel
+name: Cloudflared SOCKS5 Tunnel
 
 on:
   workflow_dispatch:
@@ -6,73 +6,41 @@ on:
     - cron: "0 */6 * * *"
 
 jobs:
-  openvpn:
+  cloudflared:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Update & Install Dependencies
+      - name: Set up SOCKS5 Proxy (no auth)
         run: |
           sudo apt update
-          sudo apt install -y openvpn easy-rsa curl unzip net-tools
-
-      - name: Set up EasyRSA
-        run: |
-          mkdir -p ~/easy-rsa
-          curl -L https://github.com/OpenVPN/easy-rsa/releases/download/v3.1.2/EasyRSA-3.1.2.tgz | tar xz -C ~/easy-rsa --strip-components=1
-          cd ~/easy-rsa
-          ./easyrsa init-pki
-          echo -ne '\n' | ./easyrsa build-ca nopass
-          ./easyrsa gen-dh
-          ./easyrsa build-server-full server nopass
-          ./easyrsa build-client-full client1 nopass
-          ./easyrsa gen-crl
-
-      - name: Configure OpenVPN
-        run: |
-          mkdir -p ~/openvpn
-          cat > ~/openvpn/server.conf <<EOF
-port 1194
-proto tcp
-dev tun
-ca ~/easy-rsa/pki/ca.crt
-cert ~/easy-rsa/pki/issued/server.crt
-key ~/easy-rsa/pki/private/server.key
-dh ~/easy-rsa/pki/dh.pem
-server 10.8.0.0 255.255.255.0
-ifconfig-pool-persist ipp.txt
-keepalive 10 120
-persist-key
-persist-tun
-status openvpn-status.log
-verb 3
+          sudo apt install -y dante-server
+          cat <<EOF | sudo tee /etc/danted.conf
+logoutput: stderr
+internal: 0.0.0.0 port = 1080
+external: eth0
+method: none
+user.privileged: root
+user.notprivileged: nobody
+client pass {
+  from: 0.0.0.0/0 to: 0.0.0.0/0
+  log: connect disconnect error
+}
+pass {
+  from: 0.0.0.0/0 to: 0.0.0.0/0
+  protocol: tcp udp
+}
 EOF
+          sudo systemctl restart danted
 
-      - name: Start OpenVPN server
+      - name: Download Cloudflared
         run: |
-          sudo openvpn --config ~/openvpn/server.conf > openvpn.log 2>&1 &
+          wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
+          chmod +x cloudflared
+
+      - name: Start Cloudflared Tunnel (SOCKS5 on port 1080)
+        run: |
+          ./cloudflared tunnel --url socks5://localhost:1080 --no-autoupdate > tunnel.log 2>&1 &
           sleep 10
-          echo "OpenVPN started"
-          if ! ps aux | grep '[o]penvpn'; then
-            echo "OpenVPN failed to start"; cat openvpn.log; exit 1
-          fi
-
-      - name: Download and run Ngrok
-        run: |
-          curl -s https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip -o ngrok.zip
-          unzip ngrok.zip
-          chmod +x ngrok
-          ./ngrok authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
-          ./ngrok tcp 1194 > ngrok.log 2>&1 &
-          sleep 10
-          echo "Ngrok started"
-          if ! ps aux | grep '[n]grok'; then
-            echo "Ngrok failed to start"; cat ngrok.log; exit 1
-          fi
-
-      - name: Show Ngrok Tunnel Info
-        run: |
-          sleep 5
-          curl -s http://localhost:4040/api/tunnels > tunnels.json || echo "Error fetching tunnels"
-          cat tunnels.json
-          echo "Tunnel URL:"
-          grep -o 'tcp://[0-9a-zA-Z\.:]*' tunnels.json || echo "Tunnel not found"
+          echo "Cloudflared Tunnel Started"
+          cat tunnel.log | grep -o "https://.*trycloudflare.com" || echo "Tunnel URL not found"
 
