@@ -1,10 +1,10 @@
-name: Loophole Tunnel with Tinyproxy
+name: Cloudflare Proxy Tunnel
 
 on:
   workflow_dispatch:
 
 jobs:
-  loophole-tunnel:
+  cf-tunnel:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -25,34 +25,17 @@ jobs:
           sudo service tinyproxy restart
           neofetch || true
 
-      - name: Download Loophole CLI
+      - name: Download Cloudflare Tunnel Binary
         run: |
-          curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_64bit.tar.gz
-          tar -xzf loophole.tar.gz
-          chmod +x loophole-cli_1.0.0-beta.15_linux_64bit/loophole
-          mv loophole-cli_1.0.0-beta.15_linux_64bit/loophole .
+          curl -fsSL https://trycloudflare.com -o cf
+          chmod +x cf
 
-      - name: Run Loophole Login and Show URL
+      - name: Start Cloudflare Tunnel
         run: |
-          echo "=== Starting Loophole Login ==="
-          ./loophole account login > login_output.txt 2>&1 &
-          sleep 10
-          cat login_output.txt | grep -i "https://" || echo "No login link found. Try again."
-
-      - name: Wait for Manual Login
-        run: |
-          echo ""
-          echo "=== Action Paused: Please login using the link above ==="
-          echo "Waiting 3 minutes for login..."
-          sleep 180
-
-      - name: Start Loophole Tunnel
-        run: |
-          echo "=== Starting Loophole Tunnel ==="
-          nohup ./loophole http 8888 > tunnel.log 2>&1 &
+          nohup ./cf tunnel --url http://localhost:8888 > tunnel.log 2>&1 &
           sleep 15
-          echo "=== Loophole Tunnel URL ==="
-          cat tunnel.log | grep -Eo 'https://[a-zA-Z0-9.-]+\.loophole\.site' | head -n 1 || echo "URL not found"
+          echo "=== Cloudflare Tunnel URL ==="
+          grep -Eo "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" tunnel.log | head -n 1 || echo "URL not found"
 
       - name: Keep Alive
         run: |
