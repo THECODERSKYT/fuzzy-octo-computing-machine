@@ -1,0 +1,59 @@
+name: Tinyproxy + Cloudflare Tunnel + System Info
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"  # Auto restart every 6 hours
+
+jobs:
+  tunnel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Show System Info (Fastfetch & Neofetch)
+        run: |
+          sudo apt update
+          sudo apt install -y neofetch git build-essential cmake
+
+          # Install fastfetch from source
+          git clone https://github.com/fastfetch-cli/fastfetch.git
+          cd fastfetch
+          mkdir build && cd build
+          cmake ..
+          make
+          sudo make install
+          
+          echo "===== FASTFETCH OUTPUT ====="
+          fastfetch || true
+          
+          echo "===== NEOFETCH OUTPUT ====="
+          neofetch || true
+
+      - name: Install Tinyproxy
+        run: |
+          sudo apt install -y tinyproxy
+
+      - name: Configure Tinyproxy
+        run: |
+          sudo sed -i 's/^Allow.*/#Allow/g' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/g' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^Port 8888/Port 8080/g' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^Bind.*/#Bind/g' /etc/tinyproxy/tinyproxy.conf
+          echo "MaxClients 100" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+          echo "MaxRequestsPerChild 0" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+
+      - name: Start Tinyproxy
+        run: |
+          sudo systemctl restart tinyproxy
+          sudo systemctl enable tinyproxy
+
+      - name: Download Cloudflare Tunnel
+        run: |
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+
+      - name: Start Tunnel
+        run: |
+          echo "==== Cloudflare Tunnel Starting ===="
+          ./cloudflared tunnel --url http://localhost:8080 --no-autoupdate
+          
