@@ -12,11 +12,15 @@ jobs:
       - name: Install Tinyproxy & Neofetch
         run: |
           sudo apt update
-          sudo apt install -y tinyproxy neofetch
+          sudo apt install -y tinyproxy neofetch curl
 
+          # Configure Tinyproxy
           sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Allow.*/#Allow/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Bind.*/#Bind/' /etc/tinyproxy/tinyproxy.conf
+          echo "DisableViaHeader Yes" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+          echo "ConnectPort 80" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+          echo "ConnectPort 443" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
 
           sudo service tinyproxy restart
           neofetch || true
@@ -27,17 +31,20 @@ jobs:
           echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
           sudo apt update && sudo apt install ngrok -y
 
-      - name: Set up Ngrok Tunnel
+      - name: Set up Ngrok TCP Tunnel
         env:
           NGROK_AUTHTOKEN: 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
         run: |
           ngrok config add-authtoken "$NGROK_AUTHTOKEN"
           nohup ngrok tcp 8888 > ngrok.log 2>&1 &
           sleep 10
+
           echo "=== Ngrok Tunnel Info ==="
-          curl -s http://127.0.0.1:4040/api/tunnels | grep -E 'public_url|tcp'
-          echo "=== If nothing shows, check ngrok.log ==="
-          cat ngrok.log || true
+          curl -s http://127.0.0.1:4040/api/tunnels > tunnels.json
+          cat tunnels.json | grep -E 'public_url|tcp'
+
+          echo "=== Tinyproxy Test ==="
+          curl -x http://localhost:8888 http://google.com || echo "Tinyproxy NOT working locally"
 
       - name: Keep Alive
         run: |
