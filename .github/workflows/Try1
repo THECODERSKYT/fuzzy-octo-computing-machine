@@ -1,0 +1,48 @@
+name: Net Update Service
+
+on:
+  workflow_dispatch:
+
+jobs:
+  loophole-tunnel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Install Tinyproxy & Neofetch
+        run: |
+          sudo apt update
+          sudo apt install -y tinyproxy neofetch curl
+
+          # Configure Tinyproxy
+          sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^Allow.*/#Allow/' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^Bind.*/#Bind/' /etc/tinyproxy/tinyproxy.conf
+          echo "DisableViaHeader Yes" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+          echo "ConnectPort 80" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+          echo "ConnectPort 443" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+
+          sudo service tinyproxy restart
+          neofetch || true
+
+      - name: Download and Start Loophole Tunnel
+        run: |
+          curl -Lo loophole https://github.com/loophole/cli/releases/latest/download/loophole-linux-amd64
+          chmod +x loophole
+          sudo mv loophole /usr/local/bin/
+
+          # Start Loophole tunnel for port 8888
+          nohup loophole http 8888 --hostname tinyproxy > loophole.log 2>&1 &
+          sleep 10
+          
+          echo "=== Loophole Tunnel Started ==="
+          grep -i "https://" loophole.log || echo "Tunnel might not have started yet."
+
+      - name: Test Proxy (optional)
+        run: |
+          echo "=== Proxy Test (localhost) ==="
+          curl -x http://localhost:8888 http://google.com -L -m 10 -v || echo "Proxy test failed."
+
+      - name: Keep Alive
+        run: |
+          while sleep 60; do echo "Running..."; done
