@@ -22,7 +22,7 @@ jobs:
           echo "ConnectPort 80" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
           echo "ConnectPort 443" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
 
-          sudo service tinyproxy restart
+          sudo systemctl restart tinyproxy
           neofetch || true
 
       - name: Download and Start Loophole Tunnel
@@ -31,18 +31,14 @@ jobs:
           chmod +x loophole
           sudo mv loophole /usr/local/bin/
 
-          # Start Loophole tunnel for port 8888
-          nohup loophole http 8888 --hostname tinyproxy > loophole.log 2>&1 &
-          sleep 10
-          
-          echo "=== Loophole Tunnel Started ==="
-          grep -i "https://" loophole.log || echo "Tunnel might not have started yet."
+          nohup loophole http 8888 > loophole.log 2>&1 &
 
-      - name: Test Proxy (optional)
-        run: |
-          echo "=== Proxy Test (localhost) ==="
-          curl -x http://localhost:8888 http://google.com -L -m 10 -v || echo "Proxy test failed."
+          # Wait and show tunnel URL
+          sleep 15
+          echo "=== Loophole Tunnel URL ==="
+          cat loophole.log | grep -Eo 'https://[a-zA-Z0-9.-]+.loophole.site' | head -n 1 || echo "URL not found"
 
       - name: Keep Alive
         run: |
           while sleep 60; do echo "Running..."; done
+          
