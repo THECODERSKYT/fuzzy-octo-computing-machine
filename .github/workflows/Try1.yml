@@ -25,24 +25,17 @@ jobs:
           sudo service tinyproxy restart
           neofetch || true
 
-      - name: Download & Start Loophole
+      - name: Download & Start Loophole CLI
         run: |
-          # Download and extract
-          curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_arm64.tar.gz
+          curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_64bit.tar.gz
           tar -xzf loophole.tar.gz
 
-          # List extracted files for debug
-          echo "=== Extracted Files ==="
-          ls -R
-
-          # Move into extracted folder
-          cd loophole-cli_1.0.0-beta.15_linux_arm64
+          cd loophole-cli_1.0.0-beta.15_linux_64bit
           chmod +x loophole
 
-          # Start tunnel in background
           nohup ./loophole http 8888 > ../tunnel.log 2>&1 &
-
           sleep 15
+
           echo "=== Loophole Tunnel Log ==="
           cat ../tunnel.log || echo "Tunnel failed to start"
 
