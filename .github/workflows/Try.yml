@@ -4,34 +4,40 @@ on:
   workflow_dispatch:
 
 jobs:
-  tunnel:
+  teleport:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
-      - name: Install Tinyproxy + Neofetch
+      - name: Install Tinyproxy & Neofetch
         run: |
           sudo apt update
           sudo apt install -y tinyproxy neofetch curl
 
-          # Tinyproxy config
+          # Tinyproxy config for open access on port 8080
           sudo sed -i 's/^Port .*/Port 8080/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Allow.*/#Allow/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Bind.*/#Bind/' /etc/tinyproxy/tinyproxy.conf
           sudo systemctl restart tinyproxy
-
+          echo "=== NEOFETCH ==="
           neofetch || true
 
-      - name: Download and Start Teleport Tunnel
+      - name: Download Teleport CLI
         run: |
           curl -L -o teleport https://github.com/tryteleport/teleport/releases/latest/download/teleport-linux-x64
           chmod +x teleport
-          ./teleport tcp --port 8080 > tunnel.txt 2>&1 &
-          sleep 10
-          cat tunnel.txt | grep teleport.sh || true
 
-      - name: Keep Tunnel Alive
+      - name: Start Teleport Tunnel and Print URL
         run: |
-          while sleep 60; do echo "Still running..."; done
+          ./teleport tcp --port 8080 > teleport.log 2>&1 &
+          sleep 15
+          echo "=== TELEPORT TUNNEL LOG ==="
+          cat teleport.log || echo "Teleport log not found"
+          echo "=== POSSIBLE TELEPORT LINK ==="
+          grep -Eo 'tcp://[a-zA-Z0-9.-]+\.teleport\.sh:[0-9]+' teleport.log || echo "No teleport link found"
+
+      - name: Keep Alive
+        run: |
+          while sleep 60; do echo "Tunnel running..."; done
           
