@@ -1,4 +1,4 @@
-name: Tinyproxy + Cloudflare HTTP Tunnel
+name: Teleport TCP Tunnel with Tinyproxy
 
 on:
   workflow_dispatch:
@@ -6,41 +6,33 @@ on:
     - cron: "0 */6 * * *"
 
 jobs:
-  tunnel:
+  teleport:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+
     steps:
-      - name: Install tools
+      - name: Install Tinyproxy + Neofetch
         run: |
           sudo apt update
-          sudo apt install -y tinyproxy neofetch git build-essential cmake
+          sudo apt install -y tinyproxy neofetch curl
 
-          # Install fastfetch
-          git clone https://github.com/fastfetch-cli/fastfetch.git
-          cd fastfetch
-          mkdir build && cd build
-          cmake ..
-          make
-          sudo make install
-          
-          echo "=== Fastfetch ==="
-          fastfetch || true
-          echo "=== Neofetch ==="
-          neofetch || true
-
-      - name: Configure Tinyproxy
-        run: |
-          sudo sed -i 's/^Allow.*/#Allow/g' /etc/tinyproxy/tinyproxy.conf
-          sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/g' /etc/tinyproxy/tinyproxy.conf
-          sudo sed -i 's/^Port .*/Port 8080/g' /etc/tinyproxy/tinyproxy.conf
-          sudo sed -i 's/^Bind.*/#Bind/g' /etc/tinyproxy/tinyproxy.conf
-          echo "MaxClients 100" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
-          echo "MaxRequestsPerChild 0" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+          # Configure Tinyproxy on port 8080, allow all
+          sudo sed -i 's/^Port .*/Port 8080/' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^Allow.*/#Allow/' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^Bind.*/#Bind/' /etc/tinyproxy/tinyproxy.conf
           sudo systemctl restart tinyproxy
 
-      - name: Download & Start Cloudflare Tunnel
+          neofetch || true
+
+      - name: Download and Start Teleport TCP Tunnel
         run: |
-          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
-          chmod +x cloudflared
-          ./cloudflared tunnel --url http://localhost:8080 --no-autoupdate
+          curl -s https://teleport.sh/install.sh | bash
+          teleport tcp --port 8080 > tunnel.txt 2>&1 &
+          sleep 10
+          cat tunnel.txt | grep -i "teleport.sh" || true
+
+      - name: Keep Workflow Alive
+        run: |
+          while sleep 60; do echo "Still tunneling via Teleport..."; done
           
