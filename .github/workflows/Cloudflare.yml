@@ -21,14 +21,13 @@ jobs:
         echo "DisableViaHeader Yes" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
         echo "ConnectPort 443" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
         echo "ConnectPort 80" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+        sudo systemctl restart tinyproxy
 
-    - name: Start Tinyproxy
-      run: sudo systemctl restart tinyproxy
-
-    - name: Install Cloudflared
+    - name: Download & Setup Cloudflared
       run: |
-        curl -s https://pkg.cloudflare.com/cloudflared-stable-linux-amd64.deb -o cloudflared.deb
-        sudo dpkg -i cloudflared.deb
+        wget -O cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+        chmod +x cloudflared
+        sudo mv cloudflared /usr/local/bin/
 
     - name: Start Tunnel
       run: |
@@ -43,3 +42,4 @@ jobs:
           echo "Tunnel active..."
           sleep 300
         done
+        
