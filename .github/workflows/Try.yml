@@ -2,11 +2,9 @@ name: Teleport TCP Tunnel with Tinyproxy
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 */6 * * *"
 
 jobs:
-  teleport:
+  tunnel:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -16,7 +14,7 @@ jobs:
           sudo apt update
           sudo apt install -y tinyproxy neofetch curl
 
-          # Configure Tinyproxy on port 8080, allow all
+          # Tinyproxy config
           sudo sed -i 's/^Port .*/Port 8080/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Allow.*/#Allow/' /etc/tinyproxy/tinyproxy.conf
@@ -25,14 +23,15 @@ jobs:
 
           neofetch || true
 
-      - name: Download and Start Teleport TCP Tunnel
+      - name: Download and Start Teleport Tunnel
         run: |
-          curl -s https://teleport.sh/install.sh | bash
-          teleport tcp --port 8080 > tunnel.txt 2>&1 &
+          curl -L -o teleport https://github.com/tryteleport/teleport/releases/latest/download/teleport-linux-x64
+          chmod +x teleport
+          ./teleport tcp --port 8080 > tunnel.txt 2>&1 &
           sleep 10
-          cat tunnel.txt | grep -i "teleport.sh" || true
+          cat tunnel.txt | grep teleport.sh || true
 
-      - name: Keep Workflow Alive
+      - name: Keep Tunnel Alive
         run: |
-          while sleep 60; do echo "Still tunneling via Teleport..."; done
+          while sleep 60; do echo "Still running..."; done
           
