@@ -1,0 +1,41 @@
+name: Tinyproxy + Cloudflare Tunnel
+
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */6 * * *'  # Restart every 6 hours to keep it alive
+
+jobs:
+  tunnel:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Update & install dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y tinyproxy curl
+
+    - name: Configure Tinyproxy
+      run: |
+        sudo sed -i 's/^Allow/#Allow/' /etc/tinyproxy/tinyproxy.conf
+        echo "Allow 0.0.0.0" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+        sudo sed -i 's/^Port 8888/Port 8888/' /etc/tinyproxy/tinyproxy.conf
+        sudo sed -i 's/^Bind 127.0.0.1/#Bind 127.0.0.1/' /etc/tinyproxy/tinyproxy.conf
+        sudo systemctl restart tinyproxy
+
+    - name: Download Cloudflare Tunnel
+      run: |
+        curl -s https://raw.githubusercontent.com/cloudflare/cloudflared/master/scripts/install.sh | sudo bash
+
+    - name: Start Cloudflare Tunnel
+      run: |
+        nohup cloudflared tunnel --url http://localhost:8888 > tunnel.log 2>&1 &
+        sleep 10
+        cat tunnel.log | grep "trycloudflare.com" || cat tunnel.log
+
+    - name: Show Tunnel URL
+      run: |
+        echo "Cloudflare Tunnel URL:"
+        grep -o 'https://[^ ]*trycloudflare.com' tunnel.log || echo "URL not found!"
+        
