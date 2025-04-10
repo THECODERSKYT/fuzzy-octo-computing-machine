@@ -43,8 +43,10 @@ jobs:
           curl -s http://127.0.0.1:4040/api/tunnels > tunnels.json
           cat tunnels.json | grep -E 'public_url|tcp'
 
-          echo "=== Tinyproxy Test ==="
-          curl -x http://localhost:8888 http://google.com || echo "Tinyproxy NOT working locally"
+      - name: Test Tunnel to Google.com
+        run: |
+          echo "=== Tinyproxy Tunnel Test to Google.com ==="
+          curl -x http://localhost:8888 http://google.com -L -m 10 -v || echo "Proxy test failed."
 
       - name: Keep Alive
         run: |
