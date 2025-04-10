@@ -1,9 +1,8 @@
-name: Tinyproxy + TryCloudflare
+name: Tinyproxy + Cloudflare Tunnel
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 */6 * * *'
+  push:
 
 jobs:
   tunnel:
@@ -13,30 +12,34 @@ jobs:
     - name: Install Tinyproxy
       run: |
         sudo apt update
-        sudo apt install -y tinyproxy
+        sudo apt install -y tinyproxy curl
 
     - name: Configure Tinyproxy
       run: |
-        sudo sed -i 's/^Allow/#Allow/' /etc/tinyproxy/tinyproxy.conf
-        echo "Allow 0.0.0.0" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
-        sudo sed -i 's/^Port 8888/Port 8888/' /etc/tinyproxy/tinyproxy.conf
-        sudo sed -i 's/^Bind 127.0.0.1/#Bind 127.0.0.1/' /etc/tinyproxy/tinyproxy.conf
-        sudo systemctl restart tinyproxy
+        sudo sed -i 's/^Port .*/Port 8888/' /etc/tinyproxy/tinyproxy.conf
+        sudo sed -i 's/^Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
+        echo "DisableViaHeader Yes" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+        echo "ConnectPort 443" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+        echo "ConnectPort 80" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
 
-    - name: Download cloudflared (Cloudflare Tunnel)
+    - name: Start Tinyproxy
+      run: sudo systemctl restart tinyproxy
+
+    - name: Install Cloudflared
       run: |
-        wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-        chmod +x cloudflared-linux-amd64
-        sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
+        curl -s https://pkg.cloudflare.com/cloudflared-stable-linux-amd64.deb -o cloudflared.deb
+        sudo dpkg -i cloudflared.deb
 
     - name: Start Tunnel
       run: |
         nohup cloudflared tunnel --url http://localhost:8888 > tunnel.log 2>&1 &
         sleep 10
-        cat tunnel.log | grep -o 'https://.*\.trycloudflare\.com' || echo "Tunnel URL not found."
+        curl -s https://trycloudflare.com > cf.txt || true
+        grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' cf.txt || echo "Tunnel URL not found"
 
-    - name: Show Tunnel URL
+    - name: Keep Alive
       run: |
-        echo "Your Cloudflare Proxy:"
-        grep -o 'https://.*\.trycloudflare\.com' tunnel.log || echo "URL not found"
-        
+        while true; do
+          echo "Tunnel active..."
+          sleep 300
+        done
