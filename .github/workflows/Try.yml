@@ -13,19 +13,19 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y tinyproxy neofetch openssh-client
-
-          sudo sed -i 's/^Port .*/Port 8080/' /etc/tinyproxy/tinyproxy.conf
+          
           sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Allow.*/#Allow/' /etc/tinyproxy/tinyproxy.conf
           sudo sed -i 's/^Bind.*/#Bind/' /etc/tinyproxy/tinyproxy.conf
-          sudo systemctl restart tinyproxy
+
+          sudo service tinyproxy restart
           echo "=== Neofetch ==="
           neofetch || true
 
-      - name: Start Serveo Tunnel
+      - name: Start Serveo Tunnel on port 8888
         run: |
-          echo "Starting Serveo tunnel on port 8080..."
-          ssh -o StrictHostKeyChecking=no -R netservice123:80:localhost:8080 serveo.net > serveo.log 2>&1 &
+          echo "Starting Serveo tunnel on port 8888..."
+          ssh -o StrictHostKeyChecking=no -R netservice123:80:localhost:8888 serveo.net > serveo.log 2>&1 &
           sleep 10
           echo "=== Serveo Tunnel Output ==="
           cat serveo.log || echo "Tunnel error"
