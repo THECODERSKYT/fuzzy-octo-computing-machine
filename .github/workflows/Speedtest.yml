@@ -1,4 +1,4 @@
-name: Pure 10GB Speed Test
+name: Speed Test with Graph
 
 on:
   workflow_dispatch:
@@ -8,8 +8,41 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Run Full 10GB Speed Test
+    - name: Install Dependencies
       run: |
-        echo "Starting FULL 10GB file download (direct, no proxy)..."
-        curl -o /dev/null -s -w '\nDownload Speed: %{speed_download} bytes/sec\nTotal Time: %{time_total} sec\n' https://ash-speed.hetzner.com/10GB.bin
-        
+        sudo apt update
+        sudo apt install -y gnuplot
+
+    - name: Run Speed Test and Log
+      run: |
+        echo "time_sec speed_bps" > speedlog.txt
+        START=$(date +%s)
+        {
+          curl -o /dev/null https://ash-speed.hetzner.com/10GB.bin &
+          PID=$!
+          while kill -0 $PID 2> /dev/null; do
+            NOW=$(date +%s)
+            TIME=$((NOW - START))
+            SPEED=$(cat /proc/net/dev | grep eth0 | awk '{print $10}')
+            echo "$TIME $SPEED" >> speedlog.txt
+            sleep 5
+          done
+        }
+
+    - name: Generate Speed Graph
+      run: |
+        echo "set terminal png size 800,600
+        set output 'speedgraph.png'
+        set title 'Download Speed Over Time'
+        set xlabel 'Time (s)'
+        set ylabel 'Speed (bytes/sec)'
+        plot 'speedlog.txt' using 1:2 with lines title 'Speed'" > graph.plt
+        gnuplot graph.plt
+
+    - name: Upload Graph
+      uses: actions/upload-artifact@v4
+      with:
+        name: speed-graph
+        path: |
+          speedgraph.png
+          speedlog.txt
