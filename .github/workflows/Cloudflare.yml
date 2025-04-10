@@ -1,40 +1,40 @@
-name: Tinyproxy + Cloudflare
+name: Tinyproxy Cloudflare Tunnel
 
 on:
   workflow_dispatch:
 
 jobs:
-  tunnel:
+  start:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Install Tinyproxy
-      run: |
-        sudo apt update
-        sudo apt install -y tinyproxy
+      - name: Install Tinyproxy
+        run: |
+          sudo apt update
+          sudo apt install -y tinyproxy
 
-    - name: Configure Tinyproxy
-      run: |
-        sudo sed -i 's/^Port .*/Port 8888/' /etc/tinyproxy/tinyproxy.conf
-        sudo sed -i 's/^Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
-        echo "DisableViaHeader Yes" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
-        echo "ConnectPort 443" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
-        echo "ConnectPort 80" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
-        sudo systemctl restart tinyproxy
+      - name: Configure Tinyproxy
+        run: |
+          sudo sed -i 's/^Port .*/Port 8888/' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
+          echo "DisableViaHeader Yes" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+          echo "ConnectPort 443" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+          echo "ConnectPort 80" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+          sudo systemctl restart tinyproxy
 
-    - name: Install cloudflared
-      run: |
-        wget -O cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-        chmod +x cloudflared
-        sudo mv cloudflared /usr/local/bin/
+      - name: Download cloudflared
+        run: |
+          wget https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x cloudflared-linux-amd64
+          sudo mv cloudflared-linux-amd64 /usr/local/bin/cloudflared
 
-    - name: Start Cloudflare Tunnel
-      run: |
-        cloudflared tunnel --url http://localhost:8888 2>&1 | tee tunnel.log &
-        sleep 10
-        grep -Eo 'https://[-a-z0-9]+\.trycloudflare\.com' tunnel.log || echo "Tunnel URL not found"
+      - name: Start Cloudflare Tunnel
+        run: |
+          nohup cloudflared tunnel --url http://localhost:8888 > log.txt 2>&1 &
+          sleep 10
+          grep -Eo "https://[-a-z0-9]+\.trycloudflare\.com" log.txt || echo "Tunnel URL not found"
 
-    - name: Keep alive
-      run: |
-        while true; do sleep 300; done
-        
+      - name: Keep Alive
+        run: |
+          while true; do sleep 60; done
+          
