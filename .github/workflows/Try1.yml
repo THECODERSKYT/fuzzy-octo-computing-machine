@@ -1,10 +1,10 @@
-name: Cloudflare Proxy Tunnel
+name: Cloudflare Tunnel Service
 
 on:
   workflow_dispatch:
 
 jobs:
-  cf-tunnel:
+  tunnel:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -25,19 +25,19 @@ jobs:
           sudo service tinyproxy restart
           neofetch || true
 
-      - name: Download Cloudflare Tunnel Binary
+      - name: Install cloudflared (.deb method)
         run: |
-          curl -fsSL https://trycloudflare.com -o cf
-          chmod +x cf
+          wget https://github.com/cloudflare/cloudflared/releases/download/2025.4.0/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb || sudo apt -f install -y
 
       - name: Start Cloudflare Tunnel
         run: |
-          nohup ./cf tunnel --url http://localhost:8888 > tunnel.log 2>&1 &
-          sleep 15
+          nohup cloudflared tunnel --url http://localhost:8888 > tunnel.log 2>&1 &
+          sleep 10
           echo "=== Cloudflare Tunnel URL ==="
-          grep -Eo "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" tunnel.log | head -n 1 || echo "URL not found"
+          grep -Eo "https://[a-zA-Z0-9.-]+\.trycloudflare\.com" tunnel.log | head -n 1 || echo "Tunnel URL not found."
 
       - name: Keep Alive
         run: |
-          while sleep 60; do echo "Tunnel running..."; done
+          while sleep 60; do echo "Running..."; done
           
