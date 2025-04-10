@@ -25,18 +25,22 @@ jobs:
           sudo systemctl restart tinyproxy
           neofetch || true
 
-      - name: Download and Start Loophole Tunnel
+      - name: Download & Start Loophole
         run: |
           curl -Lo loophole https://github.com/loophole/cli/releases/latest/download/loophole-linux-amd64
           chmod +x loophole
           sudo mv loophole /usr/local/bin/
 
-          nohup loophole http 8888 > loophole.log 2>&1 &
-
-          # Wait and show tunnel URL
+          # Start loophole tunnel and capture output
+          nohup bash -c './loophole http 8888 > tunnel.log 2>&1' &
           sleep 15
+
           echo "=== Loophole Tunnel URL ==="
-          cat loophole.log | grep -Eo 'https://[a-zA-Z0-9.-]+.loophole.site' | head -n 1 || echo "URL not found"
+          cat tunnel.log || echo "Tunnel failed to start"
+
+          echo ""
+          echo "Extracted URL:"
+          grep -Eo 'https://[a-zA-Z0-9.-]+.loophole.site' tunnel.log | head -n 1 || echo "URL not found"
 
       - name: Keep Alive
         run: |
