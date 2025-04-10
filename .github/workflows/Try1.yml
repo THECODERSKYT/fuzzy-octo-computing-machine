@@ -12,7 +12,7 @@ jobs:
       - name: Install Tinyproxy & Neofetch
         run: |
           sudo apt update
-          sudo apt install -y tinyproxy neofetch curl
+          sudo apt install -y tinyproxy neofetch curl tar
 
           # Configure Tinyproxy
           sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
@@ -22,24 +22,24 @@ jobs:
           echo "ConnectPort 80" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
           echo "ConnectPort 443" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
 
-          sudo systemctl restart tinyproxy
+          sudo service tinyproxy restart
           neofetch || true
 
       - name: Download & Start Loophole
         run: |
-          curl -Lo loophole https://github.com/loophole/cli/releases/latest/download/loophole-linux-amd64
+          curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_arm64.tar.gz
+          tar -xzf loophole.tar.gz
           chmod +x loophole
-          sudo mv loophole /usr/local/bin/
 
-          # Start loophole tunnel and capture output
-          nohup bash -c './loophole http 8888 > tunnel.log 2>&1' &
+          # Start Loophole tunnel
+          nohup ./loophole http 8888 > tunnel.log 2>&1 &
+
           sleep 15
-
-          echo "=== Loophole Tunnel URL ==="
+          echo "=== Loophole Tunnel Log ==="
           cat tunnel.log || echo "Tunnel failed to start"
 
           echo ""
-          echo "Extracted URL:"
+          echo "=== Extracted Loophole URL ==="
           grep -Eo 'https://[a-zA-Z0-9.-]+.loophole.site' tunnel.log | head -n 1 || echo "URL not found"
 
       - name: Keep Alive
