@@ -1,27 +1,26 @@
-name: OpenVPN + Ngrok Tunnel
+name: OpenVPN with Ngrok Tunnel
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *"  # Restart every 6 hours
+    - cron: "0 */6 * * *"
 
 jobs:
-  vpn:
+  openvpn:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Install dependencies
+      - name: Update & Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y openvpn easy-rsa curl unzip
+          sudo apt install -y openvpn easy-rsa curl unzip net-tools
 
-      - name: Setup EasyRSA & Generate Certificates
+      - name: Set up EasyRSA
         run: |
           mkdir -p ~/easy-rsa
           curl -L https://github.com/OpenVPN/easy-rsa/releases/download/v3.1.2/EasyRSA-3.1.2.tgz | tar xz -C ~/easy-rsa --strip-components=1
           cd ~/easy-rsa
           ./easyrsa init-pki
-          echo | ./easyrsa build-ca nopass
+          echo -ne '\n' | ./easyrsa build-ca nopass
           ./easyrsa gen-dh
           ./easyrsa build-server-full server nopass
           ./easyrsa build-client-full client1 nopass
@@ -48,18 +47,32 @@ verb 3
 EOF
 
       - name: Start OpenVPN server
-        run: sudo openvpn --config ~/openvpn/server.conf &
+        run: |
+          sudo openvpn --config ~/openvpn/server.conf > openvpn.log 2>&1 &
+          sleep 10
+          echo "OpenVPN started"
+          if ! ps aux | grep '[o]penvpn'; then
+            echo "OpenVPN failed to start"; cat openvpn.log; exit 1
+          fi
 
-      - name: Download and configure Ngrok
+      - name: Download and run Ngrok
         run: |
           curl -s https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip -o ngrok.zip
           unzip ngrok.zip
           chmod +x ngrok
           ./ngrok authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
-          ./ngrok tcp 1194 > ngrok.log &
+          ./ngrok tcp 1194 > ngrok.log 2>&1 &
           sleep 10
+          echo "Ngrok started"
+          if ! ps aux | grep '[n]grok'; then
+            echo "Ngrok failed to start"; cat ngrok.log; exit 1
+          fi
 
-      - name: Display Ngrok TCP address
+      - name: Show Ngrok Tunnel Info
         run: |
-          curl -s http://localhost:4040/api/tunnels | grep -o 'tcp://[0-9a-zA-Z\.:]*'
-          
+          sleep 5
+          curl -s http://localhost:4040/api/tunnels > tunnels.json || echo "Error fetching tunnels"
+          cat tunnels.json
+          echo "Tunnel URL:"
+          grep -o 'tcp://[0-9a-zA-Z\.:]*' tunnels.json || echo "Tunnel not found"
+
