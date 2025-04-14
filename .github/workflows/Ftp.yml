@@ -14,11 +14,10 @@ jobs:
       - name: Download and install Filebrowser
         run: |
           curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
-          chmod +x filebrowser
 
       - name: Start Filebrowser in background
         run: |
-          nohup ./filebrowser -r . -p 8080 > filebrowser.log 2>&1 &
+          nohup /usr/local/bin/filebrowser -r . -p 8080 > filebrowser.log 2>&1 &
 
       - name: Wait for Filebrowser to start
         run: sleep 5
