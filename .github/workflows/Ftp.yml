@@ -1,0 +1,27 @@
+name: Web File Manager with Tunnel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-filebrowser:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Download Filebrowser
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/filebrowser/get/master/get.sh | bash
+
+      - name: Run Filebrowser
+        run: |
+          ./filebrowser -r . -p 8080 &
+
+      - name: Install Cloudflare Tunnel
+        run: |
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+          ./cloudflared tunnel --url http://localhost:8080
+          
