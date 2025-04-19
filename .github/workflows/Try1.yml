@@ -1,26 +1,36 @@
-name: Configure HAProxy with Ngrok
+name: Configure HAProxy with Ngrok Tunnel
 
 on:
   workflow_dispatch:
 
 jobs:
-  haproxy-ngrok:
+  haproxy-ngrok-setup:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
-      - name: Install HAProxy, Ngrok, and Dependencies
+      - name: Install dependencies (HAProxy, Ngrok, jq)
         run: |
           sudo apt update
           sudo apt install -y haproxy curl jq
 
-      - name: Start Ngrok Tunnel (TCP)
+      - name: Install Ngrok
         run: |
-          # Start Ngrok to create a TCP tunnel on port 8080
-          ngrok tcp 8080 > ngrok.log 2>&1 &
-          sleep 5
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc > /dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update && sudo apt install ngrok -y
+
+      - name: Configure Ngrok Authtoken
+        run: |
+          ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
           
-          # Fetch the Ngrok URL (TCP format)
+      - name: Start Ngrok TCP Tunnel
+        run: |
+          nohup ngrok tcp 8080 > ngrok.log 2>&1 &
+          sleep 5
+
+      - name: Fetch Ngrok TCP Tunnel URL
+        run: |
           NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r .tunnels[0].public_url)
           
           # Check if Ngrok URL is fetched correctly
@@ -29,34 +39,23 @@ jobs:
             cat ngrok.log
             exit 1
           fi
-          
+
           echo "Ngrok Tunnel URL: $NGROK_URL"
           
           # Remove 'tcp://' part to use the proper format for HAProxy
           NGROK_URL=$(echo $NGROK_URL | sed 's/tcp:\/\///')
           echo $NGROK_URL > ngrok_url.txt
 
-      - name: Debug and Verify Ngrok URL
-        run: |
-          NGROK_URL=$(cat ngrok_url.txt)
-          echo "DEBUG: Ngrok URL is: $NGROK_URL"
-          
-          # Validate the Ngrok URL format (expecting '0.tcp.ngrok.io:XXXXX')
-          if [[ ! "$NGROK_URL" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]]; then
-            echo "ERROR: Invalid Ngrok URL format!"
-            exit 1
-          fi
-
       - name: Backup Original HAProxy Config
         run: |
           sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.backup
 
-      - name: Update HAProxy Configuration
+      - name: Update HAProxy Config with Ngrok URL
         run: |
           NGROK_URL=$(cat ngrok_url.txt)
           echo "Configuring HAProxy with Ngrok URL: $NGROK_URL"
           
-          # Write the new HAProxy config file to forward to Ngrok
+          # Update HAProxy config to forward to Ngrok
           sudo bash -c "echo 'frontend http-in
           bind *:8080
           default_backend http-proxy
@@ -71,10 +70,11 @@ jobs:
         run: |
           sudo systemctl status haproxy.service
 
-      - name: Test Ngrok Tunnel via Curl
+      - name: Test HAProxy Forwarding via Curl
         run: |
           curl -x http://localhost:8080 http://google.com -L
 
       - name: Keep Alive
         run: |
           while sleep 60; do echo "Running..."; done
+          
