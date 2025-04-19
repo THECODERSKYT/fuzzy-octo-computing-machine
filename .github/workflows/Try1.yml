@@ -1,58 +1,49 @@
-name: HAProxy HTTP Proxy Tunnel
+name: HAProxy with Ngrok Tunnel
 
 on:
   workflow_dispatch:
 
 jobs:
-  haproxy-tunnel:
+  haproxy-ngrok:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
-      - name: Install HAProxy & Tools
+      - name: Install HAProxy, Ngrok, and Dependencies
         run: |
           sudo apt update
-          sudo apt install -y haproxy curl neofetch
+          sudo apt install -y haproxy curl
 
-          # Configure HAProxy as forward HTTP proxy
-          cat <<EOF | sudo tee /etc/haproxy/haproxy.cfg
-          global
-              maxconn 2048
-              daemon
+      - name: Start Ngrok Tunnel (TCP)
+        run: |
+          ngrok tcp 8080 > ngrok.log 2>&1 &
+          sleep 5
+          NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r .tunnels[0].public_url)
+          echo "Ngrok Tunnel URL: $NGROK_URL"
+          echo $NGROK_URL > ngrok_url.txt
 
-          defaults
-              mode http
-              timeout connect 5000ms
-              timeout client  50000ms
-              timeout server  50000ms
+      - name: Configure HAProxy
+        run: |
+          NGROK_URL=$(cat ngrok_url.txt | sed 's/tcp:\/\//'/)
+          echo "Configuring HAProxy with Ngrok URL: $NGROK_URL"
 
-          frontend http-in
-              bind *:8080
-              default_backend http-proxy
+          # Backup original haproxy.cfg
+          sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.backup
 
+          # Update HAProxy config to forward to Ngrok
+          sudo bash -c 'echo "frontend http-in
+          bind *:8080
+          default_backend http-proxy
           backend http-proxy
-              server proxy1 127.0.0.1:80
-          EOF
+          server proxy1 $NGROK_URL  # Forward to the Ngrok TCP tunnel URL" > /etc/haproxy/haproxy.cfg'
 
-          sudo systemctl restart haproxy
-          neofetch || true
+          # Restart HAProxy to apply the changes
+          sudo service haproxy restart
 
-      - name: Install and Configure Ngrok
+      - name: Test Tunnel with Curl
         run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update && sudo apt install -y ngrok
-
-      - name: Start Ngrok TCP Tunnel
-        env:
-          NGROK_AUTHTOKEN: 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
+          curl -x http://localhost:8080 http://google.com -L
+          
+      - name: Keep Alive
         run: |
-          ngrok config add-authtoken "$NGROK_AUTHTOKEN"
-          nohup ngrok tcp 8080 > ngrok.log 2>&1 &
-          sleep 10
-          echo "=== Ngrok Public TCP URL ==="
-          curl -s http://127.0.0.1:4040/api/tunnels | grep -E 'public_url|tcp'
-
-      - name: Keep Workflow Alive
-        run: |
-          while sleep 60; do echo "Proxy is active..."; done
+          while sleep 60; do echo "Running..."; done
