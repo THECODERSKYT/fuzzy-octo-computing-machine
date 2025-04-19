@@ -1,4 +1,4 @@
-name: HAProxy with Ngrok Tunnel
+name: Configure HAProxy with Ngrok
 
 on:
   workflow_dispatch:
@@ -16,46 +16,54 @@ jobs:
 
       - name: Start Ngrok Tunnel (TCP)
         run: |
+          # Start Ngrok to create a TCP tunnel on port 8080
           ngrok tcp 8080 > ngrok.log 2>&1 &
           sleep 5
+          
+          # Fetch the Ngrok URL (TCP format)
           NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r .tunnels[0].public_url)
           echo "Ngrok Tunnel URL: $NGROK_URL"
+          
+          # Remove 'tcp://' part to use the proper format for HAProxy
+          NGROK_URL=$(echo $NGROK_URL | sed 's/tcp:\/\///')
           echo $NGROK_URL > ngrok_url.txt
 
-      - name: Print and Debug Ngrok URL
+      - name: Debug and Verify Ngrok URL
         run: |
-          # Debug step to print the URL for verification
           NGROK_URL=$(cat ngrok_url.txt)
           echo "DEBUG: Ngrok URL is: $NGROK_URL"
-          # Ensure the URL is correct
-          echo "Correcting Ngrok URL format"
-          NGROK_URL=$(echo $NGROK_URL | sed 's/tcp:\/\///')
-          echo "Corrected Ngrok URL: $NGROK_URL"
-          echo $NGROK_URL > ngrok_url.txt  # Save the corrected URL back
+          
+          # Validate the Ngrok URL format (expecting '0.tcp.ngrok.io:XXXXX')
+          if [[ ! "$NGROK_URL" =~ ^[a-zA-Z0-9.-]+:[0-9]+$ ]]; then
+            echo "ERROR: Invalid Ngrok URL format!"
+            exit 1
+          fi
 
-      - name: Configure HAProxy
+      - name: Backup Original HAProxy Config
+        run: |
+          sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.backup
+
+      - name: Update HAProxy Configuration
         run: |
           NGROK_URL=$(cat ngrok_url.txt)
           echo "Configuring HAProxy with Ngrok URL: $NGROK_URL"
-
-          # Backup original haproxy.cfg
-          sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.backup
-
-          # Update HAProxy config to forward to Ngrok
+          
+          # Write the new HAProxy config file to forward to Ngrok
           sudo bash -c "echo 'frontend http-in
           bind *:8080
           default_backend http-proxy
           backend http-proxy
-          server proxy1 $NGROK_URL  # Forward to the Ngrok TCP tunnel URL' > /etc/haproxy/haproxy.cfg"
-
-          # Restart HAProxy to apply the changes
+          server proxy1 $NGROK_URL' > /etc/haproxy/haproxy.cfg"
+          
+      - name: Restart HAProxy Service
+        run: |
           sudo service haproxy restart
 
       - name: Check HAProxy Service Status
         run: |
           sudo systemctl status haproxy.service
 
-      - name: Test Tunnel with Curl
+      - name: Test Ngrok Tunnel via Curl
         run: |
           curl -x http://localhost:8080 http://google.com -L
 
