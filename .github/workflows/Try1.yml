@@ -22,9 +22,20 @@ jobs:
           echo "Ngrok Tunnel URL: $NGROK_URL"
           echo $NGROK_URL > ngrok_url.txt
 
+      - name: Print and Debug Ngrok URL
+        run: |
+          # Debug step to print the URL for verification
+          NGROK_URL=$(cat ngrok_url.txt)
+          echo "DEBUG: Ngrok URL is: $NGROK_URL"
+          # Ensure the URL is correct
+          echo "Correcting Ngrok URL format"
+          NGROK_URL=$(echo $NGROK_URL | sed 's/tcp:\/\///')
+          echo "Corrected Ngrok URL: $NGROK_URL"
+          echo $NGROK_URL > ngrok_url.txt  # Save the corrected URL back
+
       - name: Configure HAProxy
         run: |
-          NGROK_URL=$(cat ngrok_url.txt | sed 's/tcp:\/\///')  # Fix the sed command
+          NGROK_URL=$(cat ngrok_url.txt)
           echo "Configuring HAProxy with Ngrok URL: $NGROK_URL"
 
           # Backup original haproxy.cfg
