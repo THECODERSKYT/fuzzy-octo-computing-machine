@@ -12,7 +12,7 @@ jobs:
       - name: Install HAProxy, Ngrok, and Dependencies
         run: |
           sudo apt update
-          sudo apt install -y haproxy curl
+          sudo apt install -y haproxy curl jq
 
       - name: Start Ngrok Tunnel (TCP)
         run: |
@@ -39,6 +39,10 @@ jobs:
 
           # Restart HAProxy to apply the changes
           sudo service haproxy restart
+
+      - name: Check HAProxy Service Status
+        run: |
+          sudo systemctl status haproxy.service
 
       - name: Test Tunnel with Curl
         run: |
