@@ -24,18 +24,18 @@ jobs:
 
       - name: Configure HAProxy
         run: |
-          NGROK_URL=$(cat ngrok_url.txt | sed 's/tcp:\/\//'/)
+          NGROK_URL=$(cat ngrok_url.txt | sed 's/tcp:\/\///')  # Fix the sed command
           echo "Configuring HAProxy with Ngrok URL: $NGROK_URL"
 
           # Backup original haproxy.cfg
           sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.backup
 
           # Update HAProxy config to forward to Ngrok
-          sudo bash -c 'echo "frontend http-in
+          sudo bash -c "echo 'frontend http-in
           bind *:8080
           default_backend http-proxy
           backend http-proxy
-          server proxy1 $NGROK_URL  # Forward to the Ngrok TCP tunnel URL" > /etc/haproxy/haproxy.cfg'
+          server proxy1 $NGROK_URL  # Forward to the Ngrok TCP tunnel URL' > /etc/haproxy/haproxy.cfg"
 
           # Restart HAProxy to apply the changes
           sudo service haproxy restart
@@ -47,7 +47,7 @@ jobs:
       - name: Test Tunnel with Curl
         run: |
           curl -x http://localhost:8080 http://google.com -L
-          
+
       - name: Keep Alive
         run: |
           while sleep 60; do echo "Running..."; done
