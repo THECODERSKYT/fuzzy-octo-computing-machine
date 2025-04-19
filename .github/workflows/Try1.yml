@@ -22,6 +22,14 @@ jobs:
           
           # Fetch the Ngrok URL (TCP format)
           NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r .tunnels[0].public_url)
+          
+          # Check if Ngrok URL is fetched correctly
+          if [ -z "$NGROK_URL" ]; then
+            echo "ERROR: Ngrok URL could not be retrieved."
+            cat ngrok.log
+            exit 1
+          fi
+          
           echo "Ngrok Tunnel URL: $NGROK_URL"
           
           # Remove 'tcp://' part to use the proper format for HAProxy
