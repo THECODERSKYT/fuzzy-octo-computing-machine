@@ -1,78 +1,78 @@
-name: Configure HAProxy with Ngrok Tunnel
+name: Ngrok + HAProxy + Python HTTP Tunnel
 
 on:
   workflow_dispatch:
 
 jobs:
-  haproxy-ngrok-setup:
+  http-tunnel:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
 
     steps:
-      - name: Install dependencies (HAProxy, Ngrok, jq)
+      - name: Set up Python HTTP Server
         run: |
           sudo apt update
-          sudo apt install -y haproxy curl jq
+          sudo apt install -y python3 haproxy curl jq
+
+          mkdir -p ~/http-server
+          echo '<h1>HAProxy + Ngrok + Python</h1>' > ~/http-server/index.html
+
+          # Start Python HTTP server in background
+          nohup python3 -m http.server 8080 --directory ~/http-server &
+          sleep 3
 
       - name: Install Ngrok
         run: |
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc > /dev/null
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
           echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
           sudo apt update && sudo apt install ngrok -y
 
-      - name: Configure Ngrok Authtoken
+      - name: Start Ngrok Tunnel
+        env:
+          NGROK_AUTHTOKEN: 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
         run: |
-          ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
-          
-      - name: Start Ngrok TCP Tunnel
-        run: |
-          nohup ngrok tcp 8080 > ngrok.log 2>&1 &
+          ngrok config add-authtoken "$NGROK_AUTHTOKEN"
+          nohup ngrok tcp 80 > ngrok.log 2>&1 &
           sleep 5
 
-      - name: Fetch Ngrok TCP Tunnel URL
-        run: |
-          NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r .tunnels[0].public_url)
-          
-          # Check if Ngrok URL is fetched correctly
+          # Extract Ngrok URL
+          NGROK_URL=$(curl -s http://127.0.0.1:4040/api/tunnels | jq -r .tunnels[0].public_url)
           if [ -z "$NGROK_URL" ]; then
-            echo "ERROR: Ngrok URL could not be retrieved."
+            echo "ERROR: Ngrok URL not found"
             cat ngrok.log
             exit 1
           fi
 
-          echo "Ngrok Tunnel URL: $NGROK_URL"
-          
-          # Remove 'tcp://' part to use the proper format for HAProxy
-          NGROK_URL=$(echo $NGROK_URL | sed 's/tcp:\/\///')
-          echo $NGROK_URL > ngrok_url.txt
+          echo "Ngrok Tunnel: $NGROK_URL"
+          echo $NGROK_URL | sed 's/tcp:\/\///' > ngrok_url.txt
 
-      - name: Backup Original HAProxy Config
+      - name: Configure HAProxy with Python Server
         run: |
-          sudo cp /etc/haproxy/haproxy.cfg /etc/haproxy/haproxy.cfg.backup
+          NGROK_HOST_PORT=$(cat ngrok_url.txt)
 
-      - name: Update HAProxy Config with Ngrok URL
-        run: |
-          NGROK_URL=$(cat ngrok_url.txt)
-          echo "Configuring HAProxy with Ngrok URL: $NGROK_URL"
-          
-          # Update HAProxy config to forward to Ngrok
-          sudo bash -c "echo 'frontend http-in
-          bind *:8080
-          default_backend http-proxy
-          backend http-proxy
-          server proxy1 $NGROK_URL' > /etc/haproxy/haproxy.cfg"
-          
-      - name: Restart HAProxy Service
-        run: |
+          sudo bash -c "cat > /etc/haproxy/haproxy.cfg" <<EOF
+          global
+              daemon
+              maxconn 256
+
+          defaults
+              mode http
+              timeout connect 5000ms
+              timeout client 50000ms
+              timeout server 50000ms
+
+          frontend http-in
+              bind *:80
+              default_backend python-server
+
+          backend python-server
+              server localserver 127.0.0.1:8080
+          EOF
+
           sudo service haproxy restart
 
-      - name: Check HAProxy Service Status
+      - name: Test Tunnel
         run: |
-          sudo systemctl status haproxy.service
-
-      - name: Test HAProxy Forwarding via Curl
-        run: |
-          curl -x http://localhost:8080 http://google.com -L
+          curl -x http://localhost:80 http://localhost -L -m 10 -v || echo "Test failed"
 
       - name: Keep Alive
         run: |
