@@ -17,7 +17,7 @@ jobs:
 
       - name: Add Ngrok Authtoken
         run: |
-          ngrok config add-authtoken $NGROK_AUTHTOKEN
+          ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
           echo "Ngrok Authtoken added successfully."
 
       - name: Start Ngrok TCP Tunnel
