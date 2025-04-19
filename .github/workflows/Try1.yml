@@ -12,7 +12,8 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y jq curl ngrok haproxy
+          sudo apt install -y jq curl haproxy snapd
+          sudo snap install ngrok --classic
 
       - name: Add Ngrok Authtoken
         run: |
@@ -79,4 +80,3 @@ jobs:
       - name: Keep Alive
         run: |
           while sleep 60; do echo "Running..."; done
-          
