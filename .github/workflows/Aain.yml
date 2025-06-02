@@ -1,0 +1,52 @@
+name: Android 16 Emulator with VNC and Tunnel
+
+on:
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  android-emulator:
+    runs-on: ubuntu-latest
+    env:
+      DISPLAY: :1
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-kvm libvirt-daemon-system libvirt-clients bridge-utils virt-manager xvfb x11vnc net-tools wget unzip openjdk-11-jdk
+
+      - name: Setup Android SDK
+        run: |
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          unzip cmdline-tools.zip -d $HOME/android-sdk
+          mkdir -p $HOME/android-sdk/cmdline-tools/latest
+          mv $HOME/android-sdk/cmdline-tools/* $HOME/android-sdk/cmdline-tools/latest/
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+          yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses
+          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "platform-tools" "platforms;android-33" "system-images;android-33;google_apis;x86_64" "emulator"
+          sdkmanager --sdk_root=$ANDROID_SDK_ROOT "emulator"
+
+      - name: Create and start emulator
+        run: |
+          export ANDROID_SDK_ROOT=$HOME/android-sdk
+          export PATH=$ANDROID_SDK_ROOT/emulator:$ANDROID_SDK_ROOT/platform-tools:$PATH
+          echo no | avdmanager create avd -n test -k "system-images;android-33;google_apis;x86_64" --force
+          Xvfb :1 -screen 0 1280x720x24 & # Start virtual framebuffer for GUI
+          emulator -avd test -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim -wipe-data -accel on -no-snapshot-load -no-snapshot-save -port 5554 &
+          adb wait-for-device
+          adb shell input keyevent 82
+
+      - name: Setup x11vnc server to stream emulator screen
+        run: |
+          sudo apt-get install -y x11vnc
+          x11vnc -display :1 -forever -nopw -listen 0.0.0.0 -shared &
+
+      - name: Setup tunnel with localtunnel (alternative to ngrok/playit.gg)
+        run: |
+          npm install -g localtunnel
+          lt --port 5900 --subdomain myandroidemulator$$ & # lt will tunnel VNC default port 5900 to public URL
+
+      - name: Keep job alive for max 6 hours
+        run: |
+          echo "Emulator is running. Access VNC at your tunneled address on port 5900."
+          sleep 21600 # sleep for 6 hours
