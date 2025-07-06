@@ -1,0 +1,24 @@
+name: SSH Tunnel FreeNet
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ssh-tunnel:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Setup Tunnel
+      run: |
+        apt update && apt install -y openssh-server
+        mkdir -p /run/sshd
+        echo 'root:123456' | chpasswd
+        sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+        /usr/sbin/sshd
+        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc
+        echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list
+        apt update && apt install -y ngrok
+        ngrok config add-authtoken <TERA_NGROK_AUTHTOKEN>
+        ngrok tcp 22 > ngrok.log &
+        sleep 10
+        cat ngrok.log
+        tail -f /dev/null
