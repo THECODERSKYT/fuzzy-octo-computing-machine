@@ -1,33 +1,24 @@
-name: Free SSH Ngrok Tunnel
+name: Serveo TinyProxy Tunnel
 
-on:
-  workflow_dispatch:
+on: [workflow_dispatch]
 
 jobs:
-  build:
+  tunnel:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup SSH Server and Ngrok
-        run: |
-          echo "root:123456" | chpasswd
-          apt-get update
-          apt-get install -y openssh-server curl
-          mkdir -p /run/sshd
-          sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-          sed -i 's/Port 22/Port 22/' /etc/ssh/sshd_config
-          /usr/sbin/sshd
-
-          # Install Ngrok
-          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | tee /etc/apt/sources.list.d/ngrok.list
-          apt-get update && apt-get install -y ngrok
-
-          # Add your token below
-          ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
-          
-          echo "Starting TCP tunnel on port 22"
-          ngrok tcp 22 > ngrok.log &
-          sleep 20
-          echo "Ngrok Tunnel Running. Your SSH details below:"
-          cat ngrok.log
-          tail -f /dev/null
+    - name: Install TinyProxy
+      run: |
+        sudo apt update
+        sudo apt install tinyproxy -y
+        sudo sed -i 's/^Port 8888/Port 8888/' /etc/tinyproxy/tinyproxy.conf
+        sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
+        sudo systemctl start tinyproxy
+    - name: Start Serveo Tunnel
+      run: |
+        sudo apt install openssh-client -y
+        ssh -o StrictHostKeyChecking=no -R 80:localhost:8888 serveo.net &
+        sleep 10
+        curl -s https://ifconfig.me
+    - name: Keep Alive
+      run: |
+        while true; do echo "💓 Running..."; sleep 300; done
