@@ -1,0 +1,32 @@
+name: GitHub Internet Tunnel
+
+on: workflow_dispatch
+
+jobs:
+  start-tunnel:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Install TinyProxy
+      run: |
+        sudo apt update
+        sudo apt install tinyproxy -y
+        sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
+        sudo sed -i 's/^Port 8888/Port 8080/' /etc/tinyproxy/tinyproxy.conf
+        sudo systemctl restart tinyproxy
+
+    - name: Download Ngrok
+      run: |
+        wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-linux-amd64.zip
+        unzip ngrok-stable-linux-amd64.zip
+        chmod +x ngrok
+
+    - name: Start Ngrok Tunnel
+      run: |
+        ./ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+        nohup ./ngrok tcp 8080 > tunnel.log &
+        sleep 10
+        cat tunnel.log
+
+    - name: Keep Running
+      run: while true; do sleep 300; done
