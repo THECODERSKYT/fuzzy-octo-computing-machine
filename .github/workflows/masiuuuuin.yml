@@ -1,4 +1,4 @@
-name: Serveo TinyProxy Tunnel
+name: Loophole TinyProxy Tunnel
 
 on: [workflow_dispatch]
 
@@ -9,16 +9,17 @@ jobs:
     - name: Install TinyProxy
       run: |
         sudo apt update
-        sudo apt install tinyproxy -y
-        sudo sed -i 's/^Port 8888/Port 8888/' /etc/tinyproxy/tinyproxy.conf
+        sudo apt install tinyproxy curl unzip -y
+        sudo sed -i 's/^Port .*/Port 8888/' /etc/tinyproxy/tinyproxy.conf
         sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
         sudo systemctl start tinyproxy
-    - name: Start Serveo Tunnel
+    - name: Download and Start Loophole
       run: |
-        sudo apt install openssh-client -y
-        ssh -o StrictHostKeyChecking=no -R 80:localhost:8888 serveo.net &
+        curl -Lo loophole.zip https://github.com/loophole/cli/releases/latest/download/loophole-linux-amd64.zip
+        unzip loophole.zip
+        chmod +x loophole
+        ./loophole http 8888 --region ap &
         sleep 10
-        curl -s https://ifconfig.me
     - name: Keep Alive
       run: |
-        while true; do echo "💓 Running..."; sleep 300; done
+        while true; do echo "⏳ Still Running"; sleep 300; done
