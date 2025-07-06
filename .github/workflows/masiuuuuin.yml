@@ -1,25 +1,33 @@
-name: Loophole TinyProxy Tunnel
+name: Loophole HTTP Tunnel
 
 on: [workflow_dispatch]
 
 jobs:
-  tunnel:
+  loophole-tunnel:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Install TinyProxy
+    - name: Install dependencies
       run: |
         sudo apt update
-        sudo apt install tinyproxy curl unzip -y
-        sudo sed -i 's/^Port .*/Port 8888/' /etc/tinyproxy/tinyproxy.conf
-        sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
-        sudo systemctl start tinyproxy
-    - name: Download and Start Loophole
+        sudo apt install curl tar -y
+
+    - name: Download Loophole CLI (64bit Linux)
       run: |
-        curl -Lo loophole.zip https://github.com/loophole/cli/releases/latest/download/loophole-linux-amd64.zip
-        unzip loophole.zip
+        curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_64bit.tar.gz
+        tar -xzf loophole.tar.gz
         chmod +x loophole
-        ./loophole http 8888 --region ap &
-        sleep 10
-    - name: Keep Alive
+
+    - name: Start dummy HTTP server on port 8888
       run: |
-        while true; do echo "⏳ Still Running"; sleep 300; done
+        nohup python3 -m http.server 8888 > server.log 2>&1 &
+
+    - name: Start Loophole HTTP tunnel
+      run: |
+        nohup ./loophole http 8888 --region ap > tunnel.log 2>&1 &
+        sleep 15
+        echo "🔗 Loophole Tunnel URL:"
+        grep -Eo "https://[a-zA-Z0-9\-]+\.loophole\.site" tunnel.log || echo "❌ URL not found"
+
+    - name: Keep tunnel alive
+      run: tail -f /dev/null
