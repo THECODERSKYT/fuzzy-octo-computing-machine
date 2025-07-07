@@ -1,54 +1,106 @@
-name: WireGuard with Ngrok Tunnel
+name: OpenVPN over Ngrok (24/7)
 
-on:
-  workflow_dispatch:
+on: workflow_dispatch: push: branches: [main]
 
-jobs:
-  wireguard-ngrok:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up environment
-        run: |
-          sudo apt update
-          sudo apt install wireguard -y
-          mkdir -p wg
+jobs: openvpn-ngrok: runs-on: ubuntu-latest
 
-      - name: Generate WireGuard Keys
-        run: |
-          cd wg
-          umask 077
-          wg genkey | tee privatekey | wg pubkey > publickey
+steps:
+- name: Update system and install dependencies
+  run: |
+    sudo apt update && sudo apt install -y openvpn easy-rsa curl unzip
 
-      - name: Create WireGuard Server Config
-        run: |
-          cd wg
-          PRIV_KEY=$(cat privatekey)
-          echo "[Interface]" > wg0.conf
-          echo "Address = 10.0.0.1/24" >> wg0.conf
-          echo "PrivateKey = $PRIV_KEY" >> wg0.conf
-          echo "ListenPort = 51820" >> wg0.conf
+- name: Setup EasyRSA and generate VPN certs
+  run: |
+    make-cadir ~/openvpn-ca
+    cd ~/openvpn-ca
+    sed -i 's/export KEY_NAME=.*/export KEY_NAME="server"/' vars
+    echo "set_var EASYRSA_BATCH 1" >> vars
+    ./easyrsa init-pki
+    ./easyrsa build-ca nopass
+    ./easyrsa gen-req server nopass
+    ./easyrsa sign-req server server
+    ./easyrsa gen-dh
+    openvpn --genkey --secret ta.key
+    cp pki/ca.crt pki/private/server.key pki/issued/server.crt ta.key pki/dh.pem ~/openvpn-ca/
 
-      - name: Show WireGuard Public Key
-        run: |
-          echo "===== WireGuard Server Public Key ====="
-          cat wg/publickey
+- name: Create OpenVPN server config
+  run: |
+    mkdir -p ~/openvpn-server
+    cat > ~/openvpn-server/server.conf <<EOF
+    port 1194
+    proto tcp
+    dev tun
+    ca ca.crt
+    cert server.crt
+    key server.key
+    dh dh.pem
+    tls-auth ta.key 0
+    keepalive 10 120
+    persist-key
+    persist-tun
+    status openvpn-status.log
+    verb 3
+    server 10.8.0.0 255.255.255.0
+    push "redirect-gateway def1 bypass-dhcp"
+    push "dhcp-option DNS 8.8.8.8"
+    push "dhcp-option DNS 1.1.1.1"
+    EOF
 
-      - name: Start WireGuard
-        run: sudo wg-quick up wg/wg0.conf
+- name: Start OpenVPN server
+  run: sudo openvpn --config ~/openvpn-server/server.conf &
 
-      - name: Install Ngrok via APT
-        run: |
-          curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
-          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-          sudo apt update
-          sudo apt install ngrok -y
+- name: Download and install Ngrok
+  run: |
+    curl -sSL https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip -o ngrok.zip
+    unzip ngrok.zip
+    sudo mv ngrok /usr/local/bin
 
-      - name: Add Ngrok Auth Token
-        run: ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+- name: Add Ngrok Authtoken
+  run: ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
-      - name: Start Ngrok TCP Tunnel on port 51820
-        run: |
-          ngrok tcp 51820 &
+- name: Start Ngrok TCP tunnel for OpenVPN
+  run: ngrok tcp 1194 &
 
-      - name: Keep Alive 24/7
-        run: sleep infinity
+- name: Wait for Ngrok URL and show connection details
+  run: |
+    sleep 10
+    curl -s http://localhost:4040/api/tunnels > tunnels.json
+    echo "===== Ngrok Public TCP URL ====="
+    cat tunnels.json | grep -o 'tcp://[^"]*'
+
+- name: Generate .ovpn client config
+  run: |
+    cd ~/openvpn-ca
+    ./easyrsa gen-req client nopass
+    ./easyrsa sign-req client client
+    mkdir -p ~/client-configs/files
+    cp pki/ca.crt pki/issued/client.crt pki/private/client.key ta.key ~/client-configs/files/
+
+    # Pull public IP:PORT from ngrok tunnel
+    export NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | grep -o 'tcp://[^"]*')
+    export HOST=$(echo $NGROK_URL | cut -d/ -f3 | cut -d: -f1)
+    export PORT=$(echo $NGROK_URL | cut -d: -f3)
+
+    cat > ~/client-configs/files/client.ovpn <<EOF
+    client
+    dev tun
+    proto tcp
+    remote $HOST $PORT
+    resolv-retry infinite
+    nobind
+    persist-key
+    persist-tun
+    ca ca.crt
+    cert client.crt
+    key client.key
+    remote-cert-tls server
+    tls-auth ta.key 1
+    verb 3
+    EOF
+
+- name: Upload .ovpn client file
+  uses: actions/upload-artifact@v4
+  with:
+    name: client-config
+    path: ~/client-configs/files/client.ovpn
+
