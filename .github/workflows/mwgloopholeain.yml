@@ -1,58 +1,58 @@
-name: WireGuard + Loophole
+name: WireGuard + Loophole TCP Tunnel
 
 on:
   workflow_dispatch:
 
 jobs:
-  loophole:
+  tunnel:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Set up directories
-      run: |
-        mkdir -p wg
-        cd wg
-        umask 077
-
-    - name: Install WireGuard
+    - name: Set up dependencies
       run: |
         sudo apt update
-        sudo apt install wireguard -y
+        sudo apt install -y wireguard curl tar
+
+    - name: Create working dir
+      run: mkdir wg
 
     - name: Generate WireGuard Keys
       run: |
         cd wg
+        umask 077
         wg genkey | tee privatekey | wg pubkey > publickey
 
-    - name: Create WireGuard Config
+    - name: Create WireGuard Server Config
       run: |
         cd wg
         PRIV_KEY=$(cat privatekey)
-        echo "[Interface]" > wg0.conf
-        echo "Address = 10.0.0.1/24" >> wg0.conf
-        echo "PrivateKey = $PRIV_KEY" >> wg0.conf
-        echo "ListenPort = 51820" >> wg0.conf
-        echo "========== PUBLIC KEY =========="
-        cat publickey
+        cat <<EOF > wg0.conf
+[Interface]
+Address = 10.0.0.1/24
+ListenPort = 51820
+PrivateKey = $PRIV_KEY
+EOF
+
+    - name: Show Server Public Key
+      run: |
+        echo "=========== PUBLIC KEY ==========="
+        cat wg/publickey
 
     - name: Start WireGuard
-      run: |
-        sudo wg-quick up wg/wg0.conf
+      run: sudo wg-quick up wg/wg0.conf
 
-    - name: Download Loophole
+    - name: Download and Extract Loophole
       run: |
         curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_64bit.tar.gz
         tar -xzf loophole.tar.gz
+        cd loophole-cli_1.0.0-beta.15_linux_64bit
         chmod +x loophole
-
-    - name: Start Loophole TCP Tunnel
-      run: |
         ./loophole tunnel tcp --port 51820 --hostname wireguard-$(date +%s) &
         sleep 10
 
     - name: Show WireGuard and Tunnel Info
       run: |
-        echo "========== PUBLIC KEY =========="
+        echo "=========== WireGuard Server Public Key ==========="
         cat wg/publickey
-        echo "========== SERVER CONFIG =========="
-        cat wg/wg0.conf
+        echo "=========== Tunnel is running ==========="
+        ps aux | grep loophole | grep -v grep
