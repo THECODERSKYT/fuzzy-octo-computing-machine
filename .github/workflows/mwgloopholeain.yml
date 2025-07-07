@@ -28,13 +28,12 @@ jobs:
       run: |
         cd wg
         PRIV_KEY=$(cat privatekey)
-        cat <<EOF > wg0.conf
-[Interface]
-Address = 10.0.0.1/24
-PrivateKey = $PRIV_KEY
-ListenPort = 51820
-EOF
-        echo "Public key for client config:" && cat publickey
+        echo "[Interface]" > wg0.conf
+        echo "Address = 10.0.0.1/24" >> wg0.conf
+        echo "PrivateKey = $PRIV_KEY" >> wg0.conf
+        echo "ListenPort = 51820" >> wg0.conf
+        echo "========== PUBLIC KEY =========="
+        cat publickey
 
     - name: Start WireGuard
       run: |
@@ -50,7 +49,6 @@ EOF
       run: |
         ./loophole tunnel tcp --port 51820 --hostname wireguard-$(date +%s) &
         sleep 10
-        echo "Tunnel running. Client should connect to this Loophole public TCP endpoint."
 
     - name: Show WireGuard and Tunnel Info
       run: |
