@@ -43,7 +43,7 @@ jobs:
 
       - name: Start Loophole TCP Tunnel
         run: |
-          ./loophole-cli_1.0.0-beta.15_linux_64bit/loophole tunnel tcp --port 51820 --hostname wireguard-$(date +%s) &
+          ./loophole-cli_1.0.0-beta.15_linux_64bit/loophole server tcp --port 51820 --hostname wireguard-$(date +%s) &
           sleep 10
 
       - name: Show Tunnel & Server Info
