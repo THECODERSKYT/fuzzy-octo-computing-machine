@@ -1,35 +1,48 @@
-name: TinyProxy + Localhost.run Tunnel (Fixed)
+name: LocalTunnel + FRP Proxy Server (Unlimited)
 
-on:
-  workflow_dispatch:
+on: workflow_dispatch:
 
-jobs:
-  proxy:
-    runs-on: ubuntu-latest
+jobs: frp-proxy: runs-on: ubuntu-latest
 
-    steps:
-    - name: Install Tinyproxy and SSH
-      run: |
-        sudo apt update
-        sudo apt install tinyproxy openssh-client -y
-        sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
-        sudo sed -i 's/^Port 8888/Port 8080/' /etc/tinyproxy/tinyproxy.conf
-        sudo sed -i 's/^#ConnectPort 443/ConnectPort 443/' /etc/tinyproxy/tinyproxy.conf
-        sudo sed -i 's/^#ConnectPort 563/ConnectPort 563/' /etc/tinyproxy/tinyproxy.conf
-        sudo systemctl restart tinyproxy
+steps:
+- name: Install dependencies
+  run: |
+    sudo apt update
+    sudo apt install tinyproxy nodejs npm wget -y
 
-    - name: Setup SSH and known_hosts
-      run: |
-        mkdir -p ~/.ssh
-        ssh-keygen -t rsa -f ~/.ssh/id_rsa -q -N ""
-        ssh-keyscan -H ssh.localhost.run >> ~/.ssh/known_hosts
+- name: Configure Tinyproxy
+  run: |
+    sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
+    sudo sed -i 's/^Port 8888/Port 8080/' /etc/tinyproxy/tinyproxy.conf
+    sudo systemctl restart tinyproxy
 
-    - name: Start SSH tunnel in background
-      run: |
-        echo "Starting tunnel..."
-        nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 ssh.localhost.run > tunnel.log 2>&1 &
-        sleep 5
-        echo "===== Tunnel Logs Start ====="
-        cat tunnel.log | head -n 30
-        echo "===== Tunnel Logs End ====="
-        sleep 300  # Keep job alive for 5 mins (you can increase this)
+- name: Install LocalTunnel
+  run: |
+    sudo npm install -g localtunnel
+
+- name: Start LocalTunnel HTTP Tunnel (Background)
+  run: |
+    nohup lt --port 8080 --subdomain proxy-$RANDOM > lt.log 2>&1 &
+    sleep 5
+    echo "===== LocalTunnel Log Start ====="
+    cat lt.log | head -n 20
+    echo "===== LocalTunnel Log End ====="
+
+- name: Install FRP Server (frps)
+  run: |
+    wget https://github.com/fatedier/frp/releases/download/v0.58.0/frp_0.58.0_linux_amd64.tar.gz
+    tar -xzf frp_0.58.0_linux_amd64.tar.gz
+    cd frp_0.58.0_linux_amd64
+
+    cat > frps.ini <<EOF
+
+[common] bind_port = 7000 dashboard_port = 7500 dashboard_user = admin dashboard_pwd = admin EOF
+
+nohup ./frps -c frps.ini > frps.log 2>&1 &
+    sleep 3
+    echo "===== FRPS Log Start ====="
+    cat frps.log | head -n 20
+    echo "===== FRPS Log End ====="
+    echo "FRP Server running on port 7000 + TinyProxy on 8080 tunneled via LocalTunnel"
+    sleep 300
+
