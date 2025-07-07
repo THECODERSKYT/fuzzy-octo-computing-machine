@@ -1,0 +1,42 @@
+name: WireGuard over Loophole
+
+on: workflow_dispatch:
+
+jobs: wireguard-loophole: runs-on: ubuntu-latest steps: - name: Install WireGuard & Tools run: | sudo apt update sudo apt install -y wireguard curl tar
+
+- name: Generate WireGuard Config
+    run: |
+      mkdir -p wg && cd wg
+      umask 077
+      wg genkey | tee privatekey | wg pubkey > publickey
+      PRIV_KEY=$(cat privatekey)
+
+      echo "[Interface]" > wg0.conf
+      echo "Address = 10.0.0.1/24" >> wg0.conf
+      echo "ListenPort = 51820" >> wg0.conf
+      echo "PrivateKey = $PRIV_KEY" >> wg0.conf
+
+      echo "Public Key for Client:" && cat publickey
+
+  - name: Enable WireGuard
+    run: |
+      sudo wg-quick up wg/wg0.conf
+      sudo wg show
+
+  - name: Download and Run Loophole Tunnel
+    run: |
+      curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_64bit.tar.gz
+      tar -xzf loophole.tar.gz
+      chmod +x loophole
+      echo "Starting tunnel on port 51820..."
+      ./loophole tunnel tcp --port 51820 --hostname wireguard-$(date +%s) &
+      sleep 10
+      echo "Tunnel running."
+
+  - name: Show Active Tunnel and Config Info
+    run: |
+      echo "Your client should connect to the loophole tunnel on port 51820."
+      echo "Use the following public key in your WireGuard phone config:"
+      cat wg/publickey
+      echo "Set allowed IPs to 0.0.0.0/0 and IP as 10.0.0.2/24"
+
