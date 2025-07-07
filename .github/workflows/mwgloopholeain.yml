@@ -1,42 +1,60 @@
-name: WireGuard over Loophole
+name: WireGuard + Loophole
 
-on: workflow_dispatch:
+on:
+  workflow_dispatch:
 
-jobs: wireguard-loophole: runs-on: ubuntu-latest steps: - name: Install WireGuard & Tools run: | sudo apt update sudo apt install -y wireguard curl tar
+jobs:
+  loophole:
+    runs-on: ubuntu-latest
 
-- name: Generate WireGuard Config
-    run: |
-      mkdir -p wg && cd wg
-      umask 077
-      wg genkey | tee privatekey | wg pubkey > publickey
-      PRIV_KEY=$(cat privatekey)
+    steps:
+    - name: Set up directories
+      run: |
+        mkdir -p wg
+        cd wg
+        umask 077
 
-      echo "[Interface]" > wg0.conf
-      echo "Address = 10.0.0.1/24" >> wg0.conf
-      echo "ListenPort = 51820" >> wg0.conf
-      echo "PrivateKey = $PRIV_KEY" >> wg0.conf
+    - name: Install WireGuard
+      run: |
+        sudo apt update
+        sudo apt install wireguard -y
 
-      echo "Public Key for Client:" && cat publickey
+    - name: Generate WireGuard Keys
+      run: |
+        cd wg
+        wg genkey | tee privatekey | wg pubkey > publickey
 
-  - name: Enable WireGuard
-    run: |
-      sudo wg-quick up wg/wg0.conf
-      sudo wg show
+    - name: Create WireGuard Config
+      run: |
+        cd wg
+        PRIV_KEY=$(cat privatekey)
+        cat <<EOF > wg0.conf
+[Interface]
+Address = 10.0.0.1/24
+PrivateKey = $PRIV_KEY
+ListenPort = 51820
+EOF
+        echo "Public key for client config:" && cat publickey
 
-  - name: Download and Run Loophole Tunnel
-    run: |
-      curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_64bit.tar.gz
-      tar -xzf loophole.tar.gz
-      chmod +x loophole
-      echo "Starting tunnel on port 51820..."
-      ./loophole tunnel tcp --port 51820 --hostname wireguard-$(date +%s) &
-      sleep 10
-      echo "Tunnel running."
+    - name: Start WireGuard
+      run: |
+        sudo wg-quick up wg/wg0.conf
 
-  - name: Show Active Tunnel and Config Info
-    run: |
-      echo "Your client should connect to the loophole tunnel on port 51820."
-      echo "Use the following public key in your WireGuard phone config:"
-      cat wg/publickey
-      echo "Set allowed IPs to 0.0.0.0/0 and IP as 10.0.0.2/24"
+    - name: Download Loophole
+      run: |
+        curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_64bit.tar.gz
+        tar -xzf loophole.tar.gz
+        chmod +x loophole
 
+    - name: Start Loophole TCP Tunnel
+      run: |
+        ./loophole tunnel tcp --port 51820 --hostname wireguard-$(date +%s) &
+        sleep 10
+        echo "Tunnel running. Client should connect to this Loophole public TCP endpoint."
+
+    - name: Show WireGuard and Tunnel Info
+      run: |
+        echo "========== PUBLIC KEY =========="
+        cat wg/publickey
+        echo "========== SERVER CONFIG =========="
+        cat wg/wg0.conf
