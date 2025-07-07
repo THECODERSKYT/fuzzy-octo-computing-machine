@@ -1,48 +1,33 @@
-name: LocalTunnel + FRP Proxy Server (Unlimited)
+name: LocalTunnel Proxy Server
 
-on: workflow_dispatch:
+on:
+  workflow_dispatch:
 
-jobs: frp-proxy: runs-on: ubuntu-latest
+jobs:
+  proxy:
+    runs-on: ubuntu-latest
 
-steps:
-- name: Install dependencies
-  run: |
-    sudo apt update
-    sudo apt install tinyproxy nodejs npm wget -y
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install tinyproxy nodejs npm -y
 
-- name: Configure Tinyproxy
-  run: |
-    sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
-    sudo sed -i 's/^Port 8888/Port 8080/' /etc/tinyproxy/tinyproxy.conf
-    sudo systemctl restart tinyproxy
+      - name: Configure Tinyproxy
+        run: |
+          sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^Port 8888/Port 8080/' /etc/tinyproxy/tinyproxy.conf
+          sudo systemctl restart tinyproxy
 
-- name: Install LocalTunnel
-  run: |
-    sudo npm install -g localtunnel
+      - name: Install LocalTunnel
+        run: |
+          sudo npm install -g localtunnel
 
-- name: Start LocalTunnel HTTP Tunnel (Background)
-  run: |
-    nohup lt --port 8080 --subdomain proxy-$RANDOM > lt.log 2>&1 &
-    sleep 5
-    echo "===== LocalTunnel Log Start ====="
-    cat lt.log | head -n 20
-    echo "===== LocalTunnel Log End ====="
-
-- name: Install FRP Server (frps)
-  run: |
-    wget https://github.com/fatedier/frp/releases/download/v0.58.0/frp_0.58.0_linux_amd64.tar.gz
-    tar -xzf frp_0.58.0_linux_amd64.tar.gz
-    cd frp_0.58.0_linux_amd64
-
-    cat > frps.ini <<EOF
-
-[common] bind_port = 7000 dashboard_port = 7500 dashboard_user = admin dashboard_pwd = admin EOF
-
-nohup ./frps -c frps.ini > frps.log 2>&1 &
-    sleep 3
-    echo "===== FRPS Log Start ====="
-    cat frps.log | head -n 20
-    echo "===== FRPS Log End ====="
-    echo "FRP Server running on port 7000 + TinyProxy on 8080 tunneled via LocalTunnel"
-    sleep 300
-
+      - name: Start LocalTunnel Tunnel
+        run: |
+          nohup lt --port 8080 --subdomain proxy$RANDOM > lt.log 2>&1 &
+          sleep 5
+          echo "===== LocalTunnel Output Start ====="
+          cat lt.log | head -n 20
+          echo "===== LocalTunnel Output End ====="
+          sleep 300
