@@ -1,57 +1,55 @@
-name: WireGuard + Loophole Tunnel 24/7
+name: WireGuard with Ngrok TCP Tunnel
 
-on:
-  workflow_dispatch:
+on: workflow_dispatch:
 
-jobs:
-  tunnel:
-    runs-on: ubuntu-latest
+jobs: start-wireguard: runs-on: ubuntu-latest
 
-    steps:
-      - name: Install WireGuard & Tools
-        run: |
-          sudo apt update
-          sudo apt install -y wireguard curl tar
+steps:
+  - name: Update & install dependencies
+    run: |
+      sudo apt update
+      sudo apt install -y wireguard curl unzip
 
-      - name: Generate WireGuard Keys
-        run: |
-          mkdir -p wg
-          cd wg
-          umask 077
-          wg genkey | tee privatekey | wg pubkey > publickey
+  - name: Generate WireGuard server keys
+    run: |
+      mkdir -p wg
+      cd wg
+      umask 077
+      wg genkey | tee privatekey | wg pubkey > publickey
 
-      - name: Create WireGuard Server Config
-        run: |
-          cd wg
-          PRIV_KEY=$(cat privatekey)
-          echo "[Interface]" > wg0.conf
-          echo "Address = 10.0.0.1/24" >> wg0.conf
-          echo "ListenPort = 51820" >> wg0.conf
-          echo "PrivateKey = $PRIV_KEY" >> wg0.conf
+  - name: Create WireGuard config
+    run: |
+      PRIV_KEY=$(cat wg/privatekey)
+      echo "[Interface]" > wg/wg0.conf
+      echo "Address = 10.0.0.1/24" >> wg/wg0.conf
+      echo "PrivateKey = $PRIV_KEY" >> wg/wg0.conf
+      echo "ListenPort = 51820" >> wg/wg0.conf
 
-      - name: Show Server Public Key
-        run: cat wg/publickey
+  - name: Show server public key (for client)
+    run: cat wg/publickey
 
-      - name: Start WireGuard Server
-        run: sudo wg-quick up wg/wg0.conf
+  - name: Start WireGuard server
+    run: sudo wg-quick up wg/wg0.conf
 
-      - name: Download and Extract Loophole
-        run: |
-          curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_64bit.tar.gz
-          tar -xzf loophole.tar.gz
-          chmod +x loophole-cli_1.0.0-beta.15_linux_64bit/loophole
+  - name: Download and install Ngrok
+    run: |
+      curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc > /dev/null
+      echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+      sudo apt update && sudo apt install ngrok
 
-      - name: Start Loophole TCP Tunnel
-        run: |
-          ./loophole-cli_1.0.0-beta.15_linux_64bit/loophole server tcp --port 51820 --hostname wireguard-$(date +%s) &
-          sleep 10
+  - name: Authenticate Ngrok
+    run: ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
-      - name: Show Tunnel & Server Info
-        run: |
-          echo "=== WireGuard Public Key ==="
-          cat wg/publickey
-          echo "=== Tunnel Process ==="
-          ps aux | grep loophole | grep -v grep
+  - name: Start Ngrok TCP tunnel for WireGuard
+    run: nohup ngrok tcp 51820 > ngrok.log &
 
-      - name: 🟢 Keep Alive 24/7
-        run: tail -f /dev/null
+  - name: Wait and show Ngrok public TCP address
+    run: |
+      sleep 10
+      curl -s http://127.0.0.1:4040/api/tunnels > tunnels.json
+      cat tunnels.json | grep -Po 'tcp://\K[^\"]+'
+
+  - name: Keep Workflow Alive 24/7
+    run: |
+      while sleep 3600; do echo "💤 still alive..."; done
+
