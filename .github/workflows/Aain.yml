@@ -1,4 +1,4 @@
-name: TinyProxy + Localhost.run
+name: TinyProxy + Localhost.run Tunnel (Fixed)
 
 on:
   workflow_dispatch:
@@ -18,13 +18,18 @@ jobs:
         sudo sed -i 's/^#ConnectPort 563/ConnectPort 563/' /etc/tinyproxy/tinyproxy.conf
         sudo systemctl restart tinyproxy
 
-    - name: Setup SSH keys and known_hosts
+    - name: Setup SSH and known_hosts
       run: |
         mkdir -p ~/.ssh
         ssh-keygen -t rsa -f ~/.ssh/id_rsa -q -N ""
-        ssh-keyscan -t rsa ssh.localhost.run >> ~/.ssh/known_hosts
+        ssh-keyscan -H ssh.localhost.run >> ~/.ssh/known_hosts
 
-    - name: Start Tunnel with Localhost.run
+    - name: Start SSH tunnel in background
       run: |
-        echo "Waiting for tunnel link..."
-        ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 ssh.localhost.run
+        echo "Starting tunnel..."
+        nohup ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 ssh.localhost.run > tunnel.log 2>&1 &
+        sleep 5
+        echo "===== Tunnel Logs Start ====="
+        cat tunnel.log | head -n 30
+        echo "===== Tunnel Logs End ====="
+        sleep 300  # Keep job alive for 5 mins (you can increase this)
