@@ -1,60 +1,54 @@
-name: WireGuard over Ngrok
+name: WireGuard with Ngrok Tunnel
 
 on:
   workflow_dispatch:
 
 jobs:
-  tunnel:
+  wireguard-ngrok:
     runs-on: ubuntu-latest
     steps:
+      - name: Set up environment
+        run: |
+          sudo apt update
+          sudo apt install wireguard -y
+          mkdir -p wg
 
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y wireguard curl
+      - name: Generate WireGuard Keys
+        run: |
+          cd wg
+          umask 077
+          wg genkey | tee privatekey | wg pubkey > publickey
 
-    - name: Generate WireGuard keys
-      run: |
-        mkdir wg
-        cd wg
-        umask 077
-        wg genkey | tee privatekey | wg pubkey > publickey
+      - name: Create WireGuard Server Config
+        run: |
+          cd wg
+          PRIV_KEY=$(cat privatekey)
+          echo "[Interface]" > wg0.conf
+          echo "Address = 10.0.0.1/24" >> wg0.conf
+          echo "PrivateKey = $PRIV_KEY" >> wg0.conf
+          echo "ListenPort = 51820" >> wg0.conf
 
-    - name: Create WireGuard config
-      run: |
-        PRIV_KEY=$(cat wg/privatekey)
-        cat <<EOF > wg/wg0.conf
-        [Interface]
-        Address = 10.0.0.1/24
-        PrivateKey = $PRIV_KEY
-        ListenPort = 51820
-        EOF
+      - name: Show WireGuard Public Key
+        run: |
+          echo "===== WireGuard Server Public Key ====="
+          cat wg/publickey
 
-    - name: Show Server Public Key
-      run: cat wg/publickey
+      - name: Start WireGuard
+        run: sudo wg-quick up wg/wg0.conf
 
-    - name: Start WireGuard
-      run: sudo wg-quick up wg/wg0.conf
+      - name: Install Ngrok via APT
+        run: |
+          curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update
+          sudo apt install ngrok -y
 
-    - name: Download Ngrok
-      run: |
-        curl -sLo ngrok.zip https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip
-        unzip ngrok.zip
-        chmod +x ngrok
+      - name: Add Ngrok Auth Token
+        run: ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
-    - name: Start Ngrok TCP Tunnel on 51820
-      run: |
-        ./ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
-        nohup ./ngrok tcp 51820 > ngrok.log &
-        sleep 5
-        cat ngrok.log | grep -o 'tcp://[0-9a-zA-Z.:]*'
+      - name: Start Ngrok TCP Tunnel on port 51820
+        run: |
+          ngrok tcp 51820 &
 
-    - name: Show Public Key & Tunnel Info
-      run: |
-        echo "=== WireGuard Public Key ==="
-        cat wg/publickey
-        echo "=== Ngrok Tunnel URL ==="
-        curl -s http://127.0.0.1:4040/api/tunnels | grep -o 'tcp://[0-9a-zA-Z.:]*'
-
-    - name: Keep Alive
-      run: sleep 86400
+      - name: Keep Alive 24/7
+        run: sleep infinity
