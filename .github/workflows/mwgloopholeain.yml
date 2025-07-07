@@ -1,28 +1,26 @@
-name: WireGuard + Loophole TCP Tunnel
+name: WireGuard + Loophole Tunnel
 
 on:
   workflow_dispatch:
 
 jobs:
-  tunnel:
+  wireguard-tunnel:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Set up dependencies
+    - name: Install dependencies
       run: |
         sudo apt update
         sudo apt install -y wireguard curl tar
 
-    - name: Create working dir
-      run: mkdir wg
-
-    - name: Generate WireGuard Keys
+    - name: Generate WireGuard keys
       run: |
+        mkdir -p wg
         cd wg
         umask 077
         wg genkey | tee privatekey | wg pubkey > publickey
 
-    - name: Create WireGuard Server Config
+    - name: Create WireGuard config
       run: |
         cd wg
         PRIV_KEY=$(cat privatekey)
@@ -33,26 +31,30 @@ ListenPort = 51820
 PrivateKey = $PRIV_KEY
 EOF
 
-    - name: Show Server Public Key
+    - name: Show server public key (for client config)
       run: |
-        echo "=========== PUBLIC KEY ==========="
+        echo "==== SERVER PUBLIC KEY ===="
         cat wg/publickey
 
-    - name: Start WireGuard
+    - name: Start WireGuard interface
       run: sudo wg-quick up wg/wg0.conf
 
-    - name: Download and Extract Loophole
+    - name: Download and extract Loophole CLI
       run: |
         curl -Lo loophole.tar.gz https://github.com/loophole/cli/releases/download/1.0.0-beta.15/loophole-cli_1.0.0-beta.15_linux_64bit.tar.gz
         tar -xzf loophole.tar.gz
         cd loophole-cli_1.0.0-beta.15_linux_64bit
         chmod +x loophole
+
+    - name: Start Loophole TCP Tunnel on port 51820
+      run: |
+        cd loophole-cli_1.0.0-beta.15_linux_64bit
         ./loophole tunnel tcp --port 51820 --hostname wireguard-$(date +%s) &
         sleep 10
 
-    - name: Show WireGuard and Tunnel Info
+    - name: Show tunnel and WireGuard info
       run: |
-        echo "=========== WireGuard Server Public Key ==========="
-        cat wg/publickey
-        echo "=========== Tunnel is running ==========="
+        echo "=== Loophole TCP Tunnel Running ==="
         ps aux | grep loophole | grep -v grep
+        echo "=== WireGuard Server Public Key ==="
+        cat wg/publickey
