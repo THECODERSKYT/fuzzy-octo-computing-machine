@@ -1,4 +1,4 @@
-name: TinyProxy + Localhost.run Tunnel
+name: TinyProxy + Localhost.run
 
 on:
   workflow_dispatch:
@@ -8,19 +8,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Install Tinyproxy
+    - name: Install Tinyproxy and SSH
       run: |
         sudo apt update
         sudo apt install tinyproxy openssh-client -y
         sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
         sudo sed -i 's/^Port 8888/Port 8080/' /etc/tinyproxy/tinyproxy.conf
+        sudo sed -i 's/^#ConnectPort 443/ConnectPort 443/' /etc/tinyproxy/tinyproxy.conf
+        sudo sed -i 's/^#ConnectPort 563/ConnectPort 563/' /etc/tinyproxy/tinyproxy.conf
         sudo systemctl restart tinyproxy
 
-    - name: Setup SSH key
+    - name: Setup SSH keys and known_hosts
       run: |
+        mkdir -p ~/.ssh
         ssh-keygen -t rsa -f ~/.ssh/id_rsa -q -N ""
         ssh-keyscan -t rsa ssh.localhost.run >> ~/.ssh/known_hosts
 
-    - name: Create Reverse SSH Tunnel (localhost.run)
+    - name: Start Tunnel with Localhost.run
       run: |
-        ssh -R 80:localhost:8080 ssh.localhost.run
+        echo "Waiting for tunnel link..."
+        ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 ssh.localhost.run
