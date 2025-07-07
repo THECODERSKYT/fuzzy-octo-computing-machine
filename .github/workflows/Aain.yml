@@ -1,33 +1,35 @@
 name: LocalTunnel Proxy Server
 
-on: workflow_dispatch:
+on:
+  workflow_dispatch:
 
-jobs: proxy: runs-on: ubuntu-latest
+jobs:
+  proxy:
+    runs-on: ubuntu-latest
 
-steps:
-  - name: Install dependencies
-    run: |
-      sudo apt update
-      sudo apt install tinyproxy nodejs npm -y
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install tinyproxy nodejs npm -y
 
-  - name: Configure Tinyproxy
-    run: |
-      sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
-      sudo sed -i 's/^Port 8888/Port 8080/' /etc/tinyproxy/tinyproxy.conf
-      echo "AddHeader \"bypass-tunnel-reminder: true\"" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
-      sudo systemctl restart tinyproxy
+      - name: Configure Tinyproxy
+        run: |
+          sudo sed -i 's/^#Allow 127.0.0.1/Allow 0.0.0.0/' /etc/tinyproxy/tinyproxy.conf
+          sudo sed -i 's/^Port 8888/Port 8080/' /etc/tinyproxy/tinyproxy.conf
+          echo "AddHeader \"bypass-tunnel-reminder: true\"" | sudo tee -a /etc/tinyproxy/tinyproxy.conf
+          sudo systemctl restart tinyproxy
 
-  - name: Install LocalTunnel
-    run: |
-      sudo npm install -g localtunnel@2.0.0
+      - name: Install LocalTunnel (older version to avoid auth page)
+        run: |
+          sudo npm install -g localtunnel@2.0.0
 
-  - name: Start LocalTunnel Tunnel (24hr runtime with bypass header)
-    run: |
-      nohup lt --port 8080 --subdomain proxy$RANDOM > lt.log 2>&1 &
-      sleep 10
-      echo "===== LocalTunnel Output Start ====="
-      cat lt.log | head -n 20
-      echo "===== LocalTunnel Output End ====="
-      echo "Tunnel will now run for 24 hours..."
-      sleep 86400
-
+      - name: Start LocalTunnel (Run for 24 hours)
+        run: |
+          nohup lt --port 8080 --subdomain proxy$RANDOM > lt.log 2>&1 &
+          sleep 10
+          echo "===== LocalTunnel Output Start ====="
+          cat lt.log | head -n 20
+          echo "===== LocalTunnel Output End ====="
+          echo "Tunnel will now run for 24 hours..."
+          sleep 86400
