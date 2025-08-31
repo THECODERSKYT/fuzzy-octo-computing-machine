@@ -12,20 +12,20 @@ jobs:
       run: |
         sudo apt-get update -y
         sudo apt-get install -y xfce4 xfce4-goodies x11vnc xvfb \
-          websockify novnc net-tools wget curl unzip \
+          websockify novnc net-tools wget curl unzip jq \
           firefox chromium-browser
 
-    - name: Start VNC Server
+    - name: Setup Virtual Display + XFCE4
       run: |
-        mkdir -p ~/.vnc
-        x11vnc -storepasswd "github" ~/.vnc/passwd
-        Xvfb :1 -screen 0 1366x768x16 &
         export DISPLAY=:1
+        Xvfb :1 -screen 0 1366x768x16 &
+        sleep 3
         startxfce4 &
 
-    - name: Start noVNC
+    - name: Setup VNC + noVNC
       run: |
-        nohup websockify --web=/usr/share/novnc 6080 localhost:5900 > novnc.log 2>&1 &
+        x11vnc -forever -usepw -create -display :1 -passwd github &
+        websockify --web=/usr/share/novnc 6080 localhost:5900 &
 
     - name: Download ngrok
       run: |
@@ -35,16 +35,15 @@ jobs:
 
     - name: Start Ngrok Tunnel
       run: |
-        # यहाँ पर अपना ngrok authtoken डालना मत भूलना
         ./ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
         nohup ./ngrok http 6080 > ngrok.log 2>&1 &
-
-    - name: Show Tunnel URL
-      run: |
         sleep 5
+
+    - name: Show Ngrok URL
+      run: |
         curl --silent http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url'
 
     - name: Keep Alive
       run: |
-        echo "Press Ctrl+C to stop"
+        echo "🔥 XFCE4 + noVNC started. Access via Ngrok URL above."
         while true; do sleep 30; done
