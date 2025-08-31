@@ -1,0 +1,46 @@
+name: Ubuntu SSH with Ngrok
+
+on: 
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Update & Install
+      run: |
+        sudo apt update -y
+        sudo apt install -y wget unzip openssh-server
+
+    - name: Create User SKYT
+      run: |
+        sudo useradd -m SKYT
+        echo "SKYT:12345678" | sudo chpasswd
+        sudo usermod -aG sudo SKYT
+        echo "root:12345678" | sudo chpasswd
+
+    - name: Start SSH
+      run: |
+        sudo service ssh start
+
+    - name: Download & Setup Ngrok
+      run: |
+        wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-linux-amd64.zip
+        unzip ngrok-stable-linux-amd64.zip
+        sudo mv ngrok /usr/local/bin
+        ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
+
+    - name: Start Ngrok TCP Tunnel
+      run: |
+        nohup ngrok tcp 22 --region=in > ngrok.log &
+        sleep 10
+        echo "===================================="
+        curl --silent --show-error http://127.0.0.1:4040/api/tunnels | grep -o '"public_url":"tcp:[^"]*' | cut -d'"' -f4
+        echo "===================================="
+        echo "Username: SKYT"
+        echo "Password: 12345678"
+
+    - name: Keep Alive
+      run: |
+        while true; do echo "Runner active..."; sleep 300; done
