@@ -13,7 +13,7 @@ jobs:
         sudo apt-get update -y
         sudo apt-get install -y xfce4 xfce4-goodies x11vnc xvfb \
           websockify novnc net-tools wget curl unzip jq \
-          firefox chromium-browser
+         neofetch
 
     - name: Setup Virtual Display + XFCE4
       run: |
