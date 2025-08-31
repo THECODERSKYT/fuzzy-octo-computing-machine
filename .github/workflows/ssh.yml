@@ -1,46 +1,50 @@
-name: Ubuntu SSH with Ngrok
+name: Ubuntu XFCE4 + noVNC + Ngrok
 
-on: 
+on:
   workflow_dispatch:
-  push:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  desktop:
+    runs-on: ubuntu-24.04
+
     steps:
-    - name: Update & Install
+    - name: Update & Install Packages
       run: |
-        sudo apt update -y
-        sudo apt install -y wget unzip openssh-server
+        sudo apt-get update -y
+        sudo apt-get install -y xfce4 xfce4-goodies x11vnc xvfb \
+          websockify novnc net-tools wget curl unzip \
+          firefox chromium-browser
 
-    - name: Create User SKYT
+    - name: Start VNC Server
       run: |
-        sudo useradd -m SKYT
-        echo "SKYT:12345678" | sudo chpasswd
-        sudo usermod -aG sudo SKYT
-        echo "root:12345678" | sudo chpasswd
+        mkdir -p ~/.vnc
+        x11vnc -storepasswd "github" ~/.vnc/passwd
+        Xvfb :1 -screen 0 1366x768x16 &
+        export DISPLAY=:1
+        startxfce4 &
 
-    - name: Start SSH
+    - name: Start noVNC
       run: |
-        sudo service ssh start
+        nohup websockify --web=/usr/share/novnc 6080 localhost:5900 > novnc.log 2>&1 &
 
-    - name: Download & Setup Ngrok
+    - name: Download ngrok
       run: |
-        wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-linux-amd64.zip
-        unzip ngrok-stable-linux-amd64.zip
-        sudo mv ngrok /usr/local/bin
-        ngrok config add-authtoken 2eotogA5R4KDNhGM3LPPec0uk9D_5JwsdDjfp5mbogqyAUepa
+        wget -q -O ngrok.zip https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip
+        unzip ngrok.zip
+        chmod +x ./ngrok
 
-    - name: Start Ngrok TCP Tunnel
+    - name: Start Ngrok Tunnel
       run: |
-        nohup ngrok tcp 22 --region=in > ngrok.log &
-        sleep 10
-        echo "===================================="
-        curl --silent --show-error http://127.0.0.1:4040/api/tunnels | grep -o '"public_url":"tcp:[^"]*' | cut -d'"' -f4
-        echo "===================================="
-        echo "Username: SKYT"
-        echo "Password: 12345678"
+        # यहाँ पर अपना ngrok authtoken डालना मत भूलना
+        ./ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+        nohup ./ngrok http 6080 > ngrok.log 2>&1 &
+
+    - name: Show Tunnel URL
+      run: |
+        sleep 5
+        curl --silent http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url'
 
     - name: Keep Alive
       run: |
-        while true; do echo "Runner active..."; sleep 300; done
+        echo "Press Ctrl+C to stop"
+        while true; do sleep 30; done
