@@ -11,7 +11,7 @@ jobs:
     - name: Update & Install Packages
       run: |
         sudo apt-get update -y
-        sudo apt-get install -y xfce4 xfce4-goodies x11vnc xvfb \
+        sudo apt-get install -y x11vnc xvfb \
           websockify novnc net-tools wget curl unzip jq \
          neofetch
 
