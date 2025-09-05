@@ -1,49 +1,134 @@
-name: Ubuntu XFCE4 + noVNC + Ngrok
+name: SSH over Ngrok (user: skyt)
 
-on:
-  workflow_dispatch:
+on: workflow_dispatch:
 
-jobs:
-  desktop:
-    runs-on: ubuntu-24.04
+permissions: contents: read
 
-    steps:
-    - name: Update & Install Packages
-      run: |
-        sudo apt-get update -y
-        sudo apt-get install -y x11vnc xvfb \
-          websockify novnc net-tools wget curl unzip jq \
-         neofetch
+⚠️ Read before running:
 
-    - name: Setup Virtual Display + XFCE4
-      run: |
-        export DISPLAY=:1
-        Xvfb :1 -screen 0 1366x768x16 &
-        sleep 3
-        startxfce4 &
+1) Add these GitHub Secrets in your repo settings:
 
-    - name: Setup VNC + noVNC
-      run: |
-        x11vnc -forever -usepw -create -display :1 -passwd github &
-        websockify --web=/usr/share/novnc 6080 localhost:5900 &
+- NGROK_AUTHTOKEN : your ngrok authtoken
 
-    - name: Download ngrok
-      run: |
-        wget -q -O ngrok.zip https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip
-        unzip ngrok.zip
-        chmod +x ./ngrok
+- SSH_PUBLIC_KEY  : your public SSH key (starts with ssh-ed25519 or ssh-rsa)
 
-    - name: Start Ngrok Tunnel
-      run: |
-        ./ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
-        nohup ./ngrok http 6080 > ngrok.log 2>&1 &
-        sleep 5
+2) This workflow creates a non-root user skyt and disables password login.
 
-    - name: Show Ngrok URL
-      run: |
-        curl --silent http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[0].public_url'
+You will connect using your SSH key only. This is far safer than printing a password.
 
-    - name: Keep Alive
-      run: |
-        echo "🔥 XFCE4 + noVNC started. Access via Ngrok URL above."
-        while true; do sleep 30; done
+3) The tunnel and VM die when the job ends (max ~6 hours on hosted runners).
+
+jobs: ssh: runs-on: ubuntu-latest timeout-minutes: 360
+
+steps:
+  - name: Harden runner basics
+    run: |
+      sudo sysctl -w net.ipv4.ip_forward=0
+      sudo sysctl -w net.ipv6.conf.all.forwarding=0
+
+  - name: Install OpenSSH server & tools
+    run: |
+      sudo apt-get update -y
+      sudo apt-get install -y openssh-server curl jq unzip
+      sudo mkdir -p /run/sshd
+
+  - name: Create user `skyt` with sudo (NOPASSWD)
+    run: |
+      if id -u skyt >/dev/null 2>&1; then
+        echo "User skyt already exists"
+      else
+        sudo useradd -m -s /bin/bash skyt
+      fi
+      echo 'skyt ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/90-skyt >/dev/null
+      sudo chmod 440 /etc/sudoers.d/90-skyt
+
+  - name: Configure SSH for key-only auth
+    env:
+      SSH_PUBLIC_KEY: ${{ secrets.SSH_PUBLIC_KEY }}
+    run: |
+      # Add authorized key for skyt
+      sudo mkdir -p /home/skyt/.ssh
+      echo "$SSH_PUBLIC_KEY" | sudo tee /home/skyt/.ssh/authorized_keys >/dev/null
+      sudo chown -R skyt:skyt /home/skyt/.ssh
+      sudo chmod 700 /home/skyt/.ssh
+      sudo chmod 600 /home/skyt/.ssh/authorized_keys
+
+      # Tighten sshd_config
+      sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/g' /etc/ssh/sshd_config
+      sudo sed -i 's/^#\?KbdInteractiveAuthentication.*/KbdInteractiveAuthentication no/g' /etc/ssh/sshd_config
+      sudo sed -i 's/^#\?ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/g' /etc/ssh/sshd_config
+      sudo sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/g' /etc/ssh/sshd_config
+      sudo sed -i 's/^#\?PubkeyAuthentication.*/PubkeyAuthentication yes/g' /etc/ssh/sshd_config
+      echo 'ClientAliveInterval 30' | sudo tee -a /etc/ssh/sshd_config
+      echo 'ClientAliveCountMax 120' | sudo tee -a /etc/ssh/sshd_config
+
+      # Start sshd (no systemd in GH runners)
+      sudo /usr/sbin/sshd -t
+      sudo /usr/sbin/sshd
+
+  - name: Download ngrok
+    run: |
+      NGROK_ZIP_URL="https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip"
+      curl -fsSL "$NGROK_ZIP_URL" -o ngrok.zip
+      unzip -o ngrok.zip
+      sudo install -m 0755 ngrok /usr/local/bin/ngrok
+
+  - name: Authenticate ngrok
+    env:
+      NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
+    run: |
+      ngrok authtoken "$NGROK_AUTHTOKEN"
+
+  - name: Start ngrok TCP 22 (in background)
+    run: |
+      # Start ngrok with local API on 4040
+      nohup ngrok tcp 22 --log=stdout > ngrok.log 2>&1 &
+      # Wait for the API to come up
+      for i in {1..30}; do
+        if curl -s http://127.0.0.1:4040/api/tunnels >/dev/null; then
+          break
+        fi
+        sleep 1
+      done
+
+  - name: Fetch public TCP endpoint
+    id: tunnel
+    run: |
+      # Poll until the tcp tunnel is listed
+      for i in {1..60}; do
+        TUNNELS=$(curl -s http://127.0.0.1:4040/api/tunnels | jq -r '.tunnels[]? | select(.proto=="tcp") | .public_url')
+        if [ -n "$TUNNELS" ]; then
+          echo "Found: $TUNNELS"
+          break
+        fi
+        sleep 2
+      done
+
+      if [ -z "$TUNNELS" ]; then
+        echo "::error::Failed to get ngrok public tcp URL" >&2
+        exit 1
+      fi
+
+      # Expect format tcp://host:port
+      URL=$(echo "$TUNNELS" | head -n1)
+      HOST=$(echo "$URL" | sed -E 's#tcp://([^:]+):([0-9]+)#\1#')
+      PORT=$(echo "$URL" | sed -E 's#tcp://([^:]+):([0-9]+)#\2#')
+
+      echo "host=$HOST" >> $GITHUB_OUTPUT
+      echo "port=$PORT" >> $GITHUB_OUTPUT
+
+  - name: Show connection info (no secrets)
+    run: |
+      echo "=============================================="
+      echo " SSH is ready!"
+      echo " User      : skyt"
+      echo " Host      : ${{ steps.tunnel.outputs.host }}"
+      echo " Port      : ${{ steps.tunnel.outputs.port }}"
+      echo " Connect   : ssh -p ${{ steps.tunnel.outputs.port }} skyt@${{ steps.tunnel.outputs.host }}"
+      echo "=============================================="
+
+  - name: Keep job alive (CTRL+C to stop)
+    run: |
+      echo "Keeping runner alive. The session ends when the job stops or hits timeout."
+      while true; do date; sleep 60; done
+
