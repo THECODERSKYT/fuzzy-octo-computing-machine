@@ -12,12 +12,12 @@ jobs:
       - name: Install SSH & Ngrok
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y openssh-server curl unzip
+          sudo apt-get install -y openssh-server curl unzip jq
           sudo mkdir -p /run/sshd
 
           # Create user skyt with password skyt
           echo "Creating user skyt..."
-          sudo useradd -m -s /bin/bash skyt
+          sudo useradd -m -s /bin/bash skyt || true
           echo "skyt:skyt" | sudo chpasswd
           echo 'skyt ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/90-skyt
 
@@ -27,16 +27,19 @@ jobs:
 
           sudo /usr/sbin/sshd
 
-          # Download & setup ngrok
-          curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok-stable-linux-amd64.tgz -o ngrok.tgz
-          tar -xvf ngrok.tgz
-          sudo install -m 0755 ngrok /usr/local/bin/ngrok
+          # Add ngrok official apt repo + install
+          curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc \
+            | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com bookworm main" \
+            | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update
+          sudo apt install -y ngrok
 
       - name: Authenticate ngrok
         env:
           NGROK_AUTHTOKEN: ${{ secrets.NGROK_AUTHTOKEN }}
         run: |
-          ngrok authtoken "$NGROK_AUTHTOKEN"
+          ngrok config add-authtoken "$NGROK_AUTHTOKEN"
 
       - name: Start ngrok TCP tunnel
         run: |
