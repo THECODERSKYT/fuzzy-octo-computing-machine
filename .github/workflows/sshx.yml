@@ -1,26 +1,30 @@
-name: SSHX 24/7
+name: SSHX 24x7
 
 on:
-  workflow_dispatch:
-  push:
+  workflow_dispatch:    # manually start karne ke liye
+  schedule:
+    - cron: "0 */12 * * *"   # har 12 ghante me auto restart
 
 jobs:
   sshx:
     runs-on: ubuntu-latest
-    timeout-minutes: 4320   # 3 days (max GitHub allows per job)
+    timeout-minutes: 4320   # max 72h
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install SSHX
+      - name: Install and Run SSHX
         run: |
-          curl -sSf https://sshx.io/get | sh
+          echo "=== Installing SSHX ==="
+          curl -sSf https://sshx.io/get | sh -s run &
+          sleep 5
+          echo "=== SSHX Started, check above logs for your connection URL ==="
 
       - name: Keep Alive
         run: |
-          echo "Looping to keep alive..."
+          echo "Keeping workflow alive..."
           while true; do
-            echo "Still alive: $(date)"
+            echo "[$(date)] Still alive..."
             sleep 300
           done
