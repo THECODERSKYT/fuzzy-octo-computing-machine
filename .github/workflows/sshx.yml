@@ -1,0 +1,26 @@
+name: SSHX 24/7
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  sshx:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4320   # 3 days (max GitHub allows per job)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install SSHX
+        run: |
+          curl -sSf https://sshx.io/get | sh
+
+      - name: Keep Alive
+        run: |
+          echo "Looping to keep alive..."
+          while true; do
+            echo "Still alive: $(date)"
+            sleep 300
+          done
