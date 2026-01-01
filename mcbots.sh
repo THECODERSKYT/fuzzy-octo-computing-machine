@@ -50,8 +50,8 @@ cat > index.js <<EOL
 const mineflayer = require('mineflayer');
 const express = require('express');
 
-const HOST = 'blazexnode.falixsrv.me';
-const PORT_MC = 25565;
+const HOST = 'play.skyt.qzz.io';
+const PORT_MC = 26805;
 const BOT_COUNT = 3;
 const WEB_PORT = 8080;
 
